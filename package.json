@@ -1,1 +1,14 @@
-{"name":"pagecue","version":"0.1.0","private":true,"type":"module","scripts":{"test":"node --test tests/*.test.mjs"}}
+{
+  "name": "pagecue",
+  "version": "0.3.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/v03-state.test.mjs tests/v031-providers.test.mjs",
+    "test:browser": "node tests/v03-browser.cjs",
+    "test:content": "node tests/v031-content.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

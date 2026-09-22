@@ -1,20 +1,27 @@
 export const defaults={answer_provider:'openai',audio_provider:'openai',openai_model:'gpt-4o-mini',openrouter_model:'qwen/qwen3.8-flash',opencode_model:'gpt-5.4-mini',opencode_format:'responses',openai_audio_model:'gpt-4o-mini-transcribe',openrouter_audio_model:'openai/whisper-1',jev_gateway:'typesafe',jev_model:'jev-latest',jev_opencode_model:'jev-1.13',extraction_provider:'openai'};
 const bases={openai:'https://api.openai.com/v1/',openrouter:'https://openrouter.ai/api/v1/',opencode:'https://opencode.ai/zen/v1/',jev:'https://api.typesafe.ai/v1/'};
 export function validateConfig(c,audio=false) {
+  const present=value=>typeof value==='string'&&!!value.trim();
+  if(c.answer_provider==='jev'&&!['typesafe','opencode'].includes(c.jev_gateway))throw new Error('Choose a Jev gateway in Settings.');
   const providers=[c.answer_provider];
   if(c.answer_provider==='jev')providers.push(c.extraction_provider);
   if(audio)providers.push(c.audio_provider);
-  for(let p of providers){if(!bases[p])throw new Error('Choose a provider in Settings.');if(p==='jev'&&c.jev_gateway==='opencode')p='opencode';if(!c[p+'_key'])throw new Error(`Add your ${p} API key in Settings.`);}
-  if(!c[c.answer_provider+'_model'])throw new Error('Set an answer model in Settings.');
-  if(c.answer_provider==='jev'&&(!['openai','openrouter','opencode'].includes(c.extraction_provider)||!c[c.extraction_provider+'_model']))throw new Error('Select a vision/text extraction model for Jev in Settings.');
+  for(let p of providers){if(!Object.hasOwn(bases,p))throw new Error('Choose a provider in Settings.');if(p==='jev'&&c.jev_gateway==='opencode')p='opencode';if(!present(c[p+'_key']))throw new Error(`Add your ${p} API key in Settings.`);}
+  const answerModel=c.answer_provider==='jev'&&c.jev_gateway==='opencode'?c.jev_opencode_model:c[c.answer_provider+'_model'];
+  if(!present(answerModel))throw new Error('Set an answer model in Settings.');
+  if(c.answer_provider==='jev'&&(!['openai','openrouter','opencode'].includes(c.extraction_provider)||!present(c[c.extraction_provider+'_model'])))throw new Error('Select a vision/text extraction model for Jev in Settings.');
   if(audio&&!['openai','openrouter'].includes(c.audio_provider))throw new Error('Choose OpenAI or OpenRouter for transcription.');
+  if(audio&&!present(c[c.audio_provider+'_audio_model']))throw new Error('Set a transcription model in Settings.');
 }
 async function request(p,path,body,c,signal) {
   let response;
   try{response=await fetch(bases[p]+path,{method:'POST',headers:{Authorization:'Bearer '+c[p+'_key'],...(body instanceof FormData?{}:{'Content-Type':'application/json'})},body:body instanceof FormData?body:JSON.stringify(body),signal,redirect:'error'});}
   catch(e){if(signal.aborted)throw new Error('Request cancelled or timed out.');throw new Error(`${p}: network request failed. Check access and connection, then retry from recovery.`);}
   if(!response.ok)throw new Error(`${p}: HTTP ${response.status}. ${response.status===401?'Check your API key.':response.status===429?'Check credit or rate limits.':'Check the model, file format and provider settings.'}`);
-  const result=await response.json(); if(result.error)throw new Error(`${p} returned a provider error. Check model access and settings.`);return result;
+  let result;
+  try{result=await response.json();}catch{if(signal.aborted)throw new Error('Request cancelled or timed out.');throw new Error(`${p} returned an invalid JSON response. Retry from recovery.`);}
+  if(!result||typeof result!=='object'||Array.isArray(result))throw new Error(`${p} returned an invalid response. Retry from recovery.`);
+  if(result.error)throw new Error(`${p} returned a provider error. Check model access and settings.`);return result;
 }
 export async function transcribe(blob,ext,c,signal) {
   const form=new FormData();form.append('model',c[c.audio_provider+'_audio_model']);form.append('file',blob,'audio.'+ext);
@@ -27,7 +34,8 @@ async function completion(p,instructions,text,image,c,signal) {
   if(p==='openai'||p==='opencode'&&c.opencode_format==='responses') {
     const content=[{type:'input_text',text}];if(image)content.push({type:'input_image',image_url:image});
     result=await request(p,'responses',{model,instructions,input:[{role:'user',content}],store:false},c,signal);
-    output=result.output_text||result.output?.flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('\n');
+    output=typeof result.output_text==='string'?result.output_text:'';
+    if(!output&&Array.isArray(result.output))output=result.output.flatMap(x=>Array.isArray(x?.content)?x.content:[]).filter(x=>x?.type==='output_text'&&typeof x.text==='string').map(x=>x.text).join('\n');
   }else{
     const content=[{type:'text',text}];if(image)content.push({type:'image_url',image_url:{url:image}});
     result=await request(p,'chat/completions',{model,messages:[{role:'system',content:instructions},{role:'user',content}]},c,signal);
@@ -38,7 +46,7 @@ async function completion(p,instructions,text,image,c,signal) {
 export function validateStructure(s) {
   if(!s||typeof s.question!=='string'||!s.question.trim()||s.question.length>12000||s.complete!==true||s.mode!=='single_choice'||!Array.isArray(s.options)||s.options.length<2||s.options.length>12)throw new Error('Question extraction is incomplete or not single-choice. Reselect with QA, or correct it in recovery.');
   const labels=new Set(),texts=new Set();
-  for(const o of s.options){if(typeof o.label!=='string'||!o.label.trim()||o.label.length>40||o.label==='INSUFFICIENT_EVIDENCE'||typeof o.text!=='string'||!o.text.trim()||o.text.length>8000||labels.has(o.label)||texts.has(o.text))throw new Error('Question choices are missing or duplicated. Correct the question in recovery.');labels.add(o.label);texts.add(o.text);}
+  for(const o of s.options){if(!o||typeof o.label!=='string'||!o.label.trim()||o.label.length>40||o.label.trim()==='INSUFFICIENT_EVIDENCE'||typeof o.text!=='string'||!o.text.trim()||o.text.length>8000||labels.has(o.label.trim())||texts.has(o.text.trim()))throw new Error('Question choices are missing or duplicated. Correct the question in recovery.');labels.add(o.label.trim());texts.add(o.text.trim());}
   return {question:s.question,options:s.options.map(o=>({label:o.label,text:o.text})),mode:s.mode,complete:true};
 }
 export async function answer(job,c,signal,saveStructure) {

@@ -9,7 +9,7 @@ const ready=(async()=>{
   if(d.schemaVersion!==3){const transcripts=d.transcripts||(d.history||[]).filter(x=>x.kind==='transcript');await chrome.storage.local.set({schemaVersion:3,transcripts,activeTranscriptId:transcripts[0]?.id||null,activeJob:null});}
 })();
 function serial(fn){const result=queue.then(()=>ready).then(fn);queue=result.catch(()=>{});return result;}
-async function page(tabId,message,frameId){try{return await chrome.tabs.sendMessage(tabId,message,frameId===undefined?{}:{frameId});}catch{return null;}}
+async function page(tabId,message,frameId){let timer;try{return await Promise.race([chrome.tabs.sendMessage(tabId,message,frameId===undefined?{}:{frameId}),new Promise(resolve=>{timer=setTimeout(()=>resolve(null),3000);})]);}catch{return null;}finally{clearTimeout(timer);}}
 async function offscreen(){if(await chrome.offscreen.hasDocument())return;if(!creating)creating=chrome.offscreen.createDocument({url:'offscreen.html',reasons:['BLOBS','CLIPBOARD'],justification:'Download selected audio blobs and process user requests while the popup is closed.'}).finally(()=>creating=null);await creating;}
 async function active(){const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!tab||!/^https?:/.test(tab.url||''))throw new Error('Open a normal web page first.');return tab;}
 async function getJob(){return (await chrome.storage.local.get('activeJob')).activeJob;}
@@ -36,10 +36,11 @@ async function dispatch(job){
 }
 async function prepare(job){
   if(job.context){await dispatch(job);return;}
+  if(!job.retry){const valid=await page(job.tabId,{type:'validate-media',...job.media},job.mediaFrameId);if(!valid?.ok)throw new Error('The selected audio changed. Press ST and select it again.');}
   const url=mediaURL(job.media.url);const origin=new URL(url).origin+'/*';
   if(!await chrome.permissions.contains({origins:[origin]})){
     await setJob({...job,phase:'awaiting-media-access',mediaOrigin:origin});
-    await chrome.windows.create({url:chrome.runtime.getURL('access.html')+'?run='+encodeURIComponent(job.runId),type:'popup',width:460,height:370});return;
+    const permissionWindow=await chrome.windows.create({url:chrome.runtime.getURL('access.html')+'?run='+encodeURIComponent(job.runId),type:'popup',width:460,height:370});await setJob({...await getJob(),permissionWindowId:permissionWindow.id});return;
   }
   await dispatch(job);
 }
@@ -83,7 +84,7 @@ async function retry(m){
   const d=await chrome.storage.local.get(['lastJob','history','transcripts']);let old=d.lastJob;
   if(m.answerId){const item=d.history?.find(x=>x.id===m.answerId);if(!item)throw new Error('Answer not found.');const t=d.transcripts?.find(x=>x.id===item.transcriptId);if(!t)throw new Error('The source transcript is unavailable.');old={...item,context:t.text,title:t.title,source:t.source,transcriptId:t.id};}
   if(!old?.question)throw new Error('Select a question using QA or ST first.');
-  let job={...old,runId:crypto.randomUUID(),started:Date.now(),heartbeat:Date.now()};
+  let job={...old,retry:true,runId:crypto.randomUUID(),started:Date.now(),heartbeat:Date.now()};
   if(typeof m.question==='string'){if(!m.question.trim()||m.question.length>40000)throw new Error('Enter a question (maximum 40,000 characters).');job.question=m.question;job.questionImage='';job.structured=null;}
   if(m.structured)job.structured=m.structured;
   const tab=await active().catch(()=>null);job.tabId=tab?.id;job.pageUrl=tab?.url||old.pageUrl;
@@ -94,6 +95,7 @@ async function checkWorker(){const job=await getJob();if(!job)return;if(job.phas
 chrome.alarms.onAlarm.addListener(a=>{if(a.name==='worker-watch')void serial(checkWorker);});
 chrome.runtime.onInstalled.addListener(()=>{void serial(async()=>{await chrome.alarms.create('worker-watch',{periodInMinutes:1});});});
 chrome.runtime.onStartup.addListener(()=>{void serial(async()=>{const job=await getJob();if(job)await fail(job,'Chrome closed during this operation. Retry or reselect from recovery.');await chrome.alarms.create('worker-watch',{periodInMinutes:1});});});
+chrome.windows.onRemoved.addListener(windowId=>{void serial(async()=>{const job=await getJob();if(job?.phase==='awaiting-media-access'&&job.permissionWindowId===windowId)await cancel();});});
 chrome.tabs.onRemoved.addListener(tabId=>{void serial(async()=>{const job=await getJob();if(job?.tabId===tabId&&['select-media','select-question','awaiting-media-access','capturing-question'].includes(job.phase))await cancel();});});
 chrome.commands.onCommand.addListener(command=>{void serial(async()=>{const tab=await active();if(command==='guided')await begin(tab);if(command==='ask')await begin(tab,true);if(command==='reveal')await reveal(tab);}).catch(async e=>{await chrome.storage.local.set({lastError:e.message});const tab=await active().catch(()=>null);await status(tab?{tabId:tab.id}:null,e.message,true);});});
 chrome.runtime.onMessage.addListener((m,s,reply)=>{
@@ -116,7 +118,7 @@ chrome.runtime.onMessage.addListener((m,s,reply)=>{
       case 'snapshot':await checkWorker();return {...await chrome.storage.local.get(['activeJob','lastJob','lastError','history','transcripts','activeTranscriptId','previousTranscriptId'])};
       case 'provider-config':{const c=await config();return Object.fromEntries(Object.entries(c).map(([k,v])=>[k,k.endsWith('_key')?!!v:v]));}
       case 'save-provider-config':{if(await getJob())throw new Error('Cancel or finish the current operation first.');const c=await config();for(const key of Object.keys(defaults))if(typeof m.config[key]==='string')c[key]=m.config[key].trim();for(const name of ['openai','openrouter','opencode','jev']){const key=name+'_key';if(m.config[key]?.trim())c[key]=m.config[key].trim();if(m.config['clear_'+key])delete c[key];}await chrome.storage.local.set({providerConfig:c,autoCopy:!!m.config.autoCopy});break;}
-      case 'popup-action':{const tab=await active();if(m.action==='guided')await begin(tab);else if(m.action==='ask')await begin(tab,true);else if(m.action==='reveal')await reveal(tab);else if(m.action==='select-media')await page(tab.id,{type:'select-media'});break;}
+      case 'popup-action':{const tab=await active();if(m.action==='guided')await begin(tab);else if(m.action==='ask')await begin(tab,true);else if(m.action==='reveal')await reveal(tab);else if(m.action==='select-media'){if(await getJob())throw new Error('Cancel the active operation before choosing different media.');await page(tab.id,{type:'select-media'});}break;}
       case 'cancel':await cancel();break;
       case 'retry':await retry(m);break;
       case 'restore':{await cancel();const d=await chrome.storage.local.get(['transcripts','activeTranscriptId']);if(!d.transcripts?.some(t=>t.id===m.id))throw new Error('Transcript not found.');await chrome.storage.local.set({activeTranscriptId:m.id,previousTranscriptId:d.activeTranscriptId,lastError:''});break;}

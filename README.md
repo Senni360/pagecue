@@ -1,4 +1,4 @@
-# PageCue 0.3.1 — extension only
+# PageCue 0.3.2 — extension only
 
 PageCue downloads selected audio, transcribes it through your chosen API, and answers a selected question using that transcript. Everything runs inside Chrome. The Python companion and launchers are legacy files and are not used by this version. The original script is preserved.
 
@@ -54,7 +54,7 @@ Keys are in Chrome local extension storage, restricted to trusted extension cont
 
 ## Validation status
 
-A bounded test pass was authorized and completed on 22 September 2026: 12 browser interaction checks, 8 state/recovery checks, and a live ST/QA flow using OpenAI transcription and Qwen3.8 Flash answers passed. A signed audio-link picker bug was fixed. The live copy used pre-granted test permissions; first-use permission UI and real Brave/site behavior still need checking. See [the focused report](tests/V03-REPORT.md) for evidence and remaining limits. Earlier tests target the old companion prototype.
+The second bounded pass completed 62 non-paid checks and six small live Jev decisions successfully after fixes. It covered real Brave ST/QA, interrupted work, transcript recovery, malformed downloads, focused inputs and iframe keyboard selection. Live screenshot extraction used Qwen3.8 Flash before Jev. These synthetic cases are not a general accuracy benchmark. Native permission acceptance and authenticated third-party sites still need checking. See [the current report](tests/V032-REPORT.md), [test instructions](tests/README.md), and [the first-pass report](tests/V03-REPORT.md).
 
 ## API references
 

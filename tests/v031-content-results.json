@@ -1,0 +1,58 @@
+[
+  {
+    "name": "Contenteditable typing never triggers ST/QA/RA",
+    "status": "PASS"
+  },
+  {
+    "name": "Browser command question selection takes focus from input",
+    "status": "PASS"
+  },
+  {
+    "name": "Browser command media selection takes focus from contenteditable",
+    "status": "PASS"
+  },
+  {
+    "name": "Cross-origin iframe selection transfers keyboard to main question crop",
+    "status": "PASS"
+  },
+  {
+    "name": "Audio source highlight persists in originating iframe during download",
+    "status": "PASS"
+  },
+  {
+    "name": "Escape during processing sends active run cancellation",
+    "status": "PASS"
+  },
+  {
+    "name": "Keyboard alone reaches cross-origin iframe audio from top page",
+    "status": "PASS"
+  },
+  {
+    "name": "Rejected blob source allows selecting next downloadable player",
+    "status": "PASS"
+  },
+  {
+    "name": "Protected source keeps picker usable for another source",
+    "status": "PASS"
+  },
+  {
+    "name": "Invisible ancestor text is excluded from question context",
+    "status": "PASS"
+  },
+  {
+    "name": "Keyboard selection skips invisible media candidates",
+    "status": "PASS"
+  },
+  {
+    "name": "Page URL change clears selections and cancels exact run",
+    "status": "PASS"
+  },
+  {
+    "name": "Capture hide responds once even when animation frames are suspended",
+    "status": "PASS"
+  },
+  {
+    "name": "No content script runtime errors",
+    "status": "PASS"
+  }
+]

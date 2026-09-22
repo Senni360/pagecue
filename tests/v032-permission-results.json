@@ -1,0 +1,18 @@
+[
+  {
+    "name": "First-use ST reaches audio-host permission with text-only crop",
+    "status": "PASS"
+  },
+  {
+    "name": "Permission denial shows retryable message and sends no job",
+    "status": "PASS"
+  },
+  {
+    "name": "Closing permission window cancels pending selection",
+    "status": "PASS"
+  },
+  {
+    "name": "Image question without screenshot permission stops safely",
+    "status": "PASS"
+  }
+]

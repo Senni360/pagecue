@@ -5,9 +5,11 @@ export function mediaURL(value) {
   return u.href;
 }
 export function fileExtension(url, mime='') {
+  mime=mime.split(';')[0].trim().toLowerCase();
+  if(mime && !mime.startsWith('audio/') && !mime.startsWith('video/') && !['application/octet-stream','binary/octet-stream','application/ogg'].includes(mime))throw new Error('The download is not audio (possibly a login or error page). Check access and select the audio again.');
   const ext=new URL(url).pathname.split('.').pop().toLowerCase();
   if (['mp3','mp4','mpeg','mpga','m4a','wav','webm','ogg','flac'].includes(ext)) return ext;
   const types={'audio/mpeg':'mp3','audio/mp4':'m4a','video/mp4':'mp4','audio/wav':'wav','audio/x-wav':'wav','audio/webm':'webm','video/webm':'webm','audio/ogg':'ogg','audio/flac':'flac'};
-  if(types[mime.split(';')[0]])return types[mime.split(';')[0]];
+  if(types[mime])return types[mime];
   throw new Error('The download is not a supported audio file. Check the selected source.');
 }

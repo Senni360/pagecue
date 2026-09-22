@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Live ST: download + OpenAI transcription + Qwen screenshot extraction + Jev decision",
+    "status": "PASS",
+    "detail": "C. Sunday"
+  },
+  {
+    "name": "Real Chrome screenshot cropped and stored",
+    "status": "PASS"
+  },
+  {
+    "name": "Live QA: same transcript, new question, Qwen extraction + Jev decision",
+    "status": "PASS",
+    "detail": "C. 12 euros"
+  },
+  {
+    "name": "Accidental ST + Escape preserves active transcript",
+    "status": "PASS"
+  },
+  {
+    "name": "Missing audio URL: failure surfaced, previous transcript preserved",
+    "status": "PASS"
+  },
+  {
+    "name": "Recovery UI shows live results and failed download",
+    "status": "PASS"
+  },
+  {
+    "name": "Temporary test credentials removed",
+    "status": "PASS"
+  }
+]

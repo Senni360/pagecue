@@ -1,7 +1,7 @@
-const $=id=>document.getElementById(id);let snapshot;
+const $=id=>document.getElementById(id);let snapshot;const dirty=new Set();for(const id of ['question','stem','choices'])$(id).addEventListener('input',()=>dirty.add(id));
 async function send(message){const r=await chrome.runtime.sendMessage(message);if(r?.error)throw new Error(r.error);return r;}
 function button(text,fn){const b=document.createElement('button');b.textContent=text;b.onclick=()=>act(fn);return b;}
-async function act(fn){try{await fn();await load();}catch(e){$('status').textContent=e.message;}}
+async function act(fn,submitted=false){try{const result=await fn();if(submitted&&result?.ok)dirty.clear();await load();}catch(e){$('status').textContent=e.message;}}
 function text(tag,value){const el=document.createElement(tag);el.textContent=value;return el;}
 function transcripts(){
   const query=$('search').value.toLowerCase();$('transcripts').replaceChildren();
@@ -18,8 +18,8 @@ async function load(){
   $('status').textContent=snapshot.activeJob?`Working: ${snapshot.activeJob.phase.replaceAll('-',' ')}. Saved transcripts are safe.`:snapshot.lastError||'Ready. Everything runs inside Chrome.';
   const active=snapshot.transcripts?.find(t=>t.id===snapshot.activeTranscriptId);$('active').textContent=active?`QA context: ${active.title||active.source} · ${new Date(active.date).toLocaleString()}`:'No active transcript. Start with ST.';
   $('undo').disabled=!snapshot.previousTranscriptId; $('cancel').disabled=!snapshot.activeJob;$('retry').disabled=!!snapshot.activeJob||!snapshot.lastJob?.question;
-  if(document.activeElement!==$('question'))$('question').value=snapshot.lastJob?.question||'';
-  const structured=snapshot.lastJob?.structured;if(structured){if(document.activeElement!==$('stem'))$('stem').value=structured.question||'';if(document.activeElement!==$('choices'))$('choices').value=(structured.options||[]).map(o=>`${o.label}. ${o.text}`).join('\n');}
+  if(!dirty.has('question')&&document.activeElement!==$('question'))$('question').value=snapshot.lastJob?.question||'';
+  const structured=snapshot.lastJob?.structured;if(structured){if(!dirty.has('stem')&&document.activeElement!==$('stem'))$('stem').value=structured.question||'';if(!dirty.has('choices')&&document.activeElement!==$('choices'))$('choices').value=(structured.options||[]).map(o=>`${o.label}. ${o.text}`).join('\n');}
   transcripts();$('history').replaceChildren();
   for(const a of (snapshot.history||[]).filter(x=>x.kind==='answer')){
     const card=document.createElement('article');card.append(text('div',new Date(a.date).toLocaleString()),text('p',a.text),text('div','Transcript: '+(snapshot.transcripts?.find(t=>t.id===a.transcriptId)?.title||a.source||'Legacy result')));
@@ -36,11 +36,11 @@ $('undo').onclick=()=>act(()=>send({type:'restore',id:snapshot.previousTranscrip
 $('search').oninput=transcripts;$('settings').onclick=()=>chrome.runtime.openOptionsPage();
 for(const b of document.querySelectorAll('[data-action]'))b.onclick=()=>act(async()=>{await send({type:'popup-action',action:b.dataset.action});window.close();});
 $('cancel').onclick=()=>act(()=>send({type:'cancel'}));$('retry').onclick=()=>act(()=>send({type:'retry'}));$('download').onclick=()=>act(()=>send({type:'download'}));
-$('correct').onclick=()=>act(()=>send({type:'retry',question:$('question').value}));
+$('correct').onclick=()=>act(()=>send({type:'retry',question:$('question').value}),true);
 $('correctJev').onclick=()=>act(()=>{
   const options=$('choices').value.split('\n').filter(x=>x.trim()).map(line=>{const m=line.match(/^\s*([^.)\s]+)[.)]\s+(.+)$/);if(!m)throw new Error('Use one labeled choice per line: A. Choice text');return {label:m[1],text:m[2]};});
   return send({type:'retry',question:$('stem').value+'\n'+$('choices').value,structured:{question:$('stem').value,options,mode:'single_choice',complete:true}});
-});
+},true);
 load().catch(e=>$('status').textContent=e.message);
 
 let refreshTimer;chrome.storage.onChanged.addListener((changes,area)=>{if(area!=='local')return;const changed=changes.history||changes.transcripts||changes.activeTranscriptId||changes.lastError||changes.activeJob&&changes.activeJob.oldValue?.phase!==changes.activeJob.newValue?.phase;if(!changed)return;clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>{if(document.activeElement?.matches('textarea,input'))return;load().catch(e=>$('status').textContent=e.message);},150);});

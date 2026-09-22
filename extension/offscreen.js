@@ -16,8 +16,9 @@ async function execute(job,config,controller) {
       if(!file){
         const response=await fetch(mediaURL(job.media.url),{credentials:'include',signal});
         if(!response.ok)throw new Error(`Audio download failed (HTTP ${response.status}). Check login and reselect the audio if its link expired.`);
-        if(Number(response.headers.get('content-length'))>MAX_BYTES)throw new Error('Audio exceeds 24 MB. Select a smaller file.');
-        const ext=fileExtension(job.media.url,response.headers.get('content-type')||'');
+        let ext;
+        try{if(Number(response.headers.get('content-length'))>MAX_BYTES)throw new Error('Audio exceeds 24 MB. Select a smaller file.');ext=fileExtension(job.media.url,response.headers.get('content-type')||'');}
+        catch(error){await response.body?.cancel();throw error;}
         const reader=response.body.getReader();let size=0;const chunks=[];
         while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>MAX_BYTES){await reader.cancel();throw new Error('Audio exceeds 24 MB. Select a smaller file.');}chunks.push(value);}
         if(!size)throw new Error('The audio download was empty.');

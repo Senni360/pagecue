@@ -11,7 +11,20 @@
     if(el.hasAttribute('download'))return true;
     try{return /\.(mp3|mp4|mpeg|mpga|m4a|wav|webm|ogg|flac)$/i.test(new URL(el.href).pathname);}catch{return false;}
   };
-  const mediaCandidates = () => [...document.querySelectorAll(mediaSelector)].filter(isMedia);
+  function isVisible(element) {
+    if (!element?.isConnected) return false;
+    const style = getComputedStyle(element);
+    if (style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+    // Opacity is not inherited: a child can report opacity 1 inside an invisible
+    // ancestor. Such text must not silently become part of the question.
+    for (let ancestor = element; ancestor; ancestor = ancestor.parentElement) {
+      const css = getComputedStyle(ancestor);
+      if (css.display === 'none' || css.opacity === '0' || css.contentVisibility === 'hidden') return false;
+    }
+    return [...element.getClientRects()].some(rect => rect.width && rect.height);
+  }
+  const pickerCandidates = () => [...document.querySelectorAll(mediaSelector + ',iframe')].filter(el => (el instanceof HTMLIFrameElement || isMedia(el)) && isVisible(el));
+  const pickerLabel = el => el instanceof HTMLIFrameElement ? 'Enter to choose audio inside this frame' : 'Enter selects this audio';
 
   const mediaURL = el => el?.currentSrc || el?.src || el?.querySelector("source[src]")?.src || el?.href || "";
   let guidedRun = null, cropSurface = null, cropStart = null, cropRect = null, cropViewport = null, cropScroll = null, answerCard = null;
@@ -22,7 +35,8 @@
     if (root?.isConnected) return;
     root = document.createElement("div");
     root.id = "pagecue-overlay";
-    root.style.cssText = "all:initial;position:fixed;inset:0;z-index:2147483647;pointer-events:none";
+    root.style.cssText = "all:initial;position:fixed;inset:0;z-index:2147483647;pointer-events:none;outline:none";
+    root.tabIndex = -1;
     shadow = root.attachShadow({mode: "closed"});
     const style = document.createElement("style");
     style.textContent = `:host{all:initial}*{box-sizing:border-box}.box{position:fixed;border:2px solid var(--color);background:color-mix(in srgb,var(--color) 9%,transparent);border-radius:5px;pointer-events:none}.tag{position:absolute;left:-2px;top:0;transform:translateY(-100%);background:var(--color);color:white;padding:4px 8px;font:600 11px/1.3 system-ui;border-radius:4px 4px 0 0;max-width:460px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.notice{position:fixed;right:20px;bottom:20px;max-width:410px;padding:12px 16px;background:#17202dee;color:#f6f8ff;border:1px solid #ffffff22;border-radius:12px;box-shadow:0 8px 24px #0003;font:13px/1.5 system-ui;white-space:pre-wrap}.notice:empty{display:none}`;
@@ -73,18 +87,23 @@
   }
   function begin(mode) {
     checkURL(); picker = mode; hovered = null;
+    mount();
+    // All frames receive the picker message. Only the currently focused frame
+    // should move focus, otherwise a background iframe steals the keyboard.
+    if(document.hasFocus() && !(document.activeElement instanceof HTMLIFrameElement))root.focus({preventScroll:true});
     clearCandidates();
     if (mode === "media") {
-      mediaCandidates().forEach((el, i) => marks.set(`candidate-${i}`, {target:el, label:"Click to select media", color:"#2583e9"}));
+      pickerCandidates().forEach((el, i) => marks.set(`candidate-${i}`, {target:el, label:el instanceof HTMLIFrameElement?'Enter to choose audio inside this frame':"Click to select media", color:"#2583e9"}));
       mount(); draw();
-      hovered=mediaCandidates().find(el=>{const r=el.getBoundingClientRect();return r.width&&r.height;})||null;
-      if(hovered)mark("hover",hovered,"Enter selects this audio","#2583e9");
+      hovered=pickerCandidates()[0]||null;
+      if(hovered)mark("hover",hovered,pickerLabel(hovered),"#2583e9");
     }
     say("Arrows or Tab choose audio; Enter selects. You can also click a player or download link. Escape cancels.", true);
   }
   function clearCandidates() {for (const key of marks.keys()) if (key.startsWith("candidate-")) marks.delete(key);}
   function chooseMedia(element, forGuided = false) {
-    if (element.mediaKeys) {say("Protected media is unsupported.", true); return;}
+    if(element instanceof HTMLIFrameElement){picker='media';hovered=element;mark('hover',element,'Selecting audio inside this frame · Escape cancels','#2583e9');element.contentWindow?.focus();return;}
+    if (element.mediaKeys) {begin('media');say("Protected media is unsupported. Choose another player with arrows, then Enter.", true); return;}
     media = element;
     const id = [...crypto.getRandomValues(new Uint8Array(16))].map(x => x.toString(16).padStart(2,"0")).join("");
     const label = element.getAttribute("aria-label") || element.title || (element.tagName === "A" ? element.textContent : "") || element.closest("figure")?.querySelector("figcaption")?.innerText || `${element.tagName.toLowerCase()} player`;
@@ -104,8 +123,7 @@
     while ((node=walker.nextNode())) {
       const parent=node.parentElement;
       if(!parent || parent.closest('script,style,noscript,textarea,input,select,#pagecue-overlay') || !node.textContent.trim())continue;
-      const style=getComputedStyle(parent);
-      if(style.visibility==='hidden'||style.display==='none'||style.opacity==='0')continue;
+      if(!isVisible(parent))continue;
       const range=document.createRange();range.selectNodeContents(node);
       if(![...range.getClientRects()].some(r=>inRect(r,rect)))continue;
       // Include only words whose centers are inside the crop, not entire text nodes.
@@ -117,12 +135,12 @@
       }
       if(chosen.length){const line=chosen.join(' ');parts.push(line);length+=line.length;if(length>40000)break;}
     }
-    const hasVisual=[...document.querySelectorAll('img,canvas,svg,iframe,video')].some(el=>inRect(el.getBoundingClientRect(),rect));
+    const hasVisual=[...document.querySelectorAll('img,canvas,svg,iframe,video')].some(el=>isVisible(el)&&inRect(el.getBoundingClientRect(),rect));
     return {text:parts.join('\n'),hasVisual};
   }
   function questionCrop(runId,source,reuse=false) {
     if(document.activeElement instanceof HTMLIFrameElement)document.activeElement.blur();window.focus();
-    mount();clearCrop();cropRect=null;guidedRun=runId;picker=null;marks.clear();draw();questionRange=question=null;
+    mount();root.focus({preventScroll:true});clearCrop();cropRect=null;guidedRun=runId;picker=null;marks.clear();draw();questionRange=question=null;
     answerCard?.remove();
     cropSurface=document.createElement('div');
     cropSurface.style.cssText='position:fixed;inset:0;pointer-events:auto;cursor:crosshair;background:#0c122033;touch-action:none';
@@ -205,11 +223,11 @@
     if(cropKeyboard?.(event))return;
     if(picker==='media'&&['ArrowUp','ArrowDown','Tab','Enter'].includes(event.key)){
       event.preventDefault();event.stopImmediatePropagation();
-      const candidates=mediaCandidates().filter(el=>{const r=el.getBoundingClientRect();return r.width&&r.height;});
+      const candidates=pickerCandidates();
       if(!candidates.length){say('No visible player or download link in this frame.');return;}
       if(event.key==='Enter'){const target=hovered||candidates[0];picker=null;clearCandidates();marks.delete('hover');chooseMedia(target,!!guidedRun);draw();return;}
       const step=event.key==='ArrowUp'||event.shiftKey?-1:1;
-      hovered=candidates[(candidates.indexOf(hovered)+step+candidates.length)%candidates.length];hovered.scrollIntoView({block:'nearest'});mark('hover',hovered,'Enter selects this audio','#2583e9');return;
+      hovered=candidates[(candidates.indexOf(hovered)+step+candidates.length)%candidates.length];hovered.scrollIntoView({block:'nearest'});mark('hover',hovered,pickerLabel(hovered),'#2583e9');return;
     }
     if(event.repeat)return;
     keys.add(event.key.toLowerCase());if(latched)return;
@@ -231,7 +249,15 @@
     if(message.type==='guided-end-picker'){picker=null;hovered=null;clearCandidates();marks.delete('hover');draw();respond({ok:true});}
     if(message.type==='guided-question'){questionCrop(message.runId,message.source,message.reuse);respond({ok:true});}
     if(message.type==='guided-validate')respond({ok:guidedRun===message.runId && cropViewport?.width===innerWidth && cropViewport?.height===innerHeight && cropScroll?.x===scrollX && cropScroll?.y===scrollY});
-    if(message.type==='guided-hide'){mount();root.style.visibility='hidden';requestAnimationFrame(()=>requestAnimationFrame(()=>respond({ok:true})));return true;}
+    if(message.type==='guided-hide'){
+      mount();root.style.visibility='hidden';
+      // Background/occluded tabs can suspend animation frames indefinitely.
+      // Hiding is synchronous; the fallback prevents capture from getting stuck.
+      let answered=false;
+      const finish=()=>{if(answered)return;answered=true;clearTimeout(fallback);respond({ok:true});};
+      const fallback=setTimeout(finish,150);
+      requestAnimationFrame(()=>requestAnimationFrame(finish));return true;
+    }
     if(message.type==='guided-show'){if(root)root.style.visibility='visible';respond({ok:true});}
     if(message.type==='guided-cancelled'){guidedRun=null;picker=null;clearCrop();clearCandidates();marks.clear();draw();if(notice)notice.textContent='';respond({ok:true});}
     if(message.type==='reveal-answer'){if(answerCard?.isConnected)answerCard.remove();else showAnswer(message);respond({ok:true});}

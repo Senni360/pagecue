@@ -1,0 +1,90 @@
+{
+  "results": [
+    {
+      "name": "Brave ST: download, transcription, crop and answer",
+      "status": "PASS"
+    },
+    {
+      "name": "QA reuses transcript with no audio request",
+      "status": "PASS"
+    },
+    {
+      "name": "429 after transcription keeps recoverable transcript; retry does not retranscribe",
+      "status": "PASS"
+    },
+    {
+      "name": "Cancel during API call ignores late completion",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker loss is recoverable and old transcript stays active",
+      "status": "PASS"
+    },
+    {
+      "name": "Browser restart preserves transcript and does not replay an interrupted request",
+      "status": "PASS"
+    },
+    {
+      "name": "Audio source changed after selection is rejected before download",
+      "status": "PASS"
+    },
+    {
+      "name": "Reject huge.wav before transcription",
+      "status": "PASS"
+    },
+    {
+      "name": "Reject empty.wav before transcription",
+      "status": "PASS"
+    },
+    {
+      "name": "Reject fake.wav before transcription",
+      "status": "PASS"
+    },
+    {
+      "name": "Restore history and undo switches QA source",
+      "status": "PASS"
+    },
+    {
+      "name": "Question correction draft survives unrelated UI action",
+      "status": "PASS"
+    }
+  ],
+  "apiCalls": [
+    {
+      "path": "/api/openai/audio/transcriptions",
+      "mode": "normal"
+    },
+    {
+      "path": "/api/openrouter/chat/completions",
+      "mode": "normal"
+    },
+    {
+      "path": "/api/openrouter/chat/completions",
+      "mode": "normal"
+    },
+    {
+      "path": "/api/openai/audio/transcriptions",
+      "mode": "rate-limit"
+    },
+    {
+      "path": "/api/openrouter/chat/completions",
+      "mode": "rate-limit"
+    },
+    {
+      "path": "/api/openrouter/chat/completions",
+      "mode": "normal"
+    },
+    {
+      "path": "/api/openai/audio/transcriptions",
+      "mode": "delay"
+    },
+    {
+      "path": "/api/openai/audio/transcriptions",
+      "mode": "delay"
+    },
+    {
+      "path": "/api/openai/audio/transcriptions",
+      "mode": "delay"
+    }
+  ]
+}
