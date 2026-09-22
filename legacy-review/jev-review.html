@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>PageCue — Jev structure</title><link rel="stylesheet" href="ui.css"><link rel="stylesheet" href="jev-review.css"></head><body class="settings review">
+<header><div class="brand"><span class="logo">p</span><h1>Review Jev input</h1></div><button id="cancel">Cancel</button></header>
+<p id="source"></p><p>Jev selects from defined choices. Preserve the original wording, negations, units, numbers, and answer labels. Keep evidence separate from the question.</p>
+<div id="status" class="status" role="status">Loading the selected question…</div>
+<details open><summary>Selected screenshot / original text</summary><img id="capture" hidden alt="Selected question screenshot"><pre id="raw"></pre></details>
+<label for="question">1. Exact question — one single-choice question</label><textarea id="question" rows="4" placeholder="Copy the question exactly, including words such as NOT or EXCEPT."></textarea>
+<label for="choices">2. Original labeled choices</label><textarea id="choices" rows="6" placeholder="A. Exact first option&#10;B. Exact second option&#10;C. Exact third option"></textarea>
+<p class="hint">Keep each original label and meaning. Wrapped continuation lines attach to the preceding choice. Add no guessed or missing choices. Multiple-select and open-ended questions are not supported by this Jev adapter.</p>
+<label for="evidence">3. Transcript evidence</label><textarea id="evidence" rows="9" placeholder="Transcript from the selected audio"></textarea>
+<p class="hint">Keep surrounding context, speaker labels and timestamps if present. Do not add an answer or a model-generated summary here. Original transcripts remain in history even if you correct this copy.</p>
+<label for="notes">4. Uncertainty notes (optional)</label><textarea id="notes" rows="2" placeholder="For example: one number is unclear at the end. These notes are not factual evidence."></textarea>
+<label><input id="reviewed" type="checkbox"> I checked the question, every choice, and the transcript against the selected sources.</label>
+<div class="row"><button id="showPreview">Preview exact request</button><button id="evaluate" class="primary">Evaluate with Jev</button></div>
+<details><summary>Exact structured request — no API key included</summary><pre id="preview">Use Preview exact request to inspect the structure.</pre></details>
+<p class="hint">An INSUFFICIENT_EVIDENCE option is added for abstention. Confidence and probabilities are model outputs, not verified accuracy. Jev does not generate an explanation or supporting quotations.</p>
+<script src="jev-review.js"></script></body></html>

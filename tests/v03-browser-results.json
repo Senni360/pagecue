@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Typing does not trigger ST or QA",
+    "status": "PASS"
+  },
+  {
+    "name": "ST starts one job despite held key repeat",
+    "status": "PASS"
+  },
+  {
+    "name": "Keyboard media selection preserves source identity",
+    "status": "PASS"
+  },
+  {
+    "name": "Question crop includes options and negation",
+    "status": "PASS"
+  },
+  {
+    "name": "Stale media URL is rejected",
+    "status": "PASS"
+  },
+  {
+    "name": "QA asks a new question and Escape cancels",
+    "status": "PASS"
+  },
+  {
+    "name": "Answer stays hidden until reveal; reveal toggles",
+    "status": "PASS"
+  },
+  {
+    "name": "Image-only question reports visual content",
+    "status": "PASS"
+  },
+  {
+    "name": "Keyboard rectangle supports resize and submit",
+    "status": "PASS"
+  },
+  {
+    "name": "Page scroll invalidates captured region",
+    "status": "PASS"
+  },
+  {
+    "name": "Signed uppercase audio download link is selectable",
+    "status": "PASS"
+  },
+  {
+    "name": "No browser JavaScript errors",
+    "status": "PASS"
+  }
+]

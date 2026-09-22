@@ -1,0 +1,74 @@
+{
+  "manifest_version": 3,
+  "name": "PageCue",
+  "version": "0.3.1",
+  "minimum_chrome_version": "120",
+  "description": "Select, see, transcribe and ask. Quiet keyboard controls with visible source highlights.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "unlimitedStorage",
+    "downloads",
+    "offscreen",
+    "alarms",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://api.openai.com/*",
+    "https://openrouter.ai/*",
+    "https://opencode.ai/*",
+    "https://api.typesafe.ai/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "PageCue - recovery and settings"
+  },
+  "options_page": "options.html",
+  "commands": {
+    "guided": {
+      "suggested_key": {
+        "default": "Alt+Shift+T"
+      },
+      "description": "ST: select new audio and question"
+    },
+    "ask": {
+      "suggested_key": {
+        "default": "Alt+Shift+Q"
+      },
+      "description": "QA: new question using active transcript"
+    },
+    "reveal": {
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      },
+      "description": "Reveal or hide latest answer"
+    },
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+R"
+      },
+      "description": "Open transcript recovery"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*/*",
+        "http://*/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_idle"
+    }
+  ]
+}

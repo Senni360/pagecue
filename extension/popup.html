@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>PageCue recovery</title><link rel="stylesheet" href="ui.css"></head><body>
+<header><h1>PageCue</h1><button id="settings">Settings</button></header>
+<p class="hint">Normal use: ST starts new audio, QA reuses your active transcript. RA reveals an answer. Escape cancels. Hold the two letters together.</p>
+<div id="status" class="status" role="status"></div><p id="active"></p>
+<div class="actions"><button data-action="guided">New audio · ST</button><button data-action="ask">New question · QA</button><button id="cancel">Cancel operation</button><button id="retry">Retry failed step</button><button data-action="select-media">Choose media</button><button id="download">Download selected media</button></div>
+<button id="undo">Go back to previous transcript</button><h2>Transcript history</h2><input id="search" type="text" aria-label="Search transcripts" placeholder="Search title or transcript"><div id="transcripts"></div>
+<h2>Question recovery</h2><p class="hint">Correct the last question and all its choices here. This replaces its screenshot for the retry. Your transcript stays unchanged.</p>
+<label for="question">Question and choices</label><textarea id="question" rows="6"></textarea><button id="correct">Use correction and answer</button>
+<details><summary>Jev structure correction</summary><p class="hint">Single-choice questions only. One original label and choice per line, e.g. A. Exact option text.</p><label for="stem">Exact question</label><textarea id="stem" rows="3"></textarea><label for="choices">Choices</label><textarea id="choices" rows="5"></textarea><button id="correctJev">Use corrected structure</button></details>
+<h2>Answers</h2><div id="history"></div><script src="popup.js"></script></body></html>

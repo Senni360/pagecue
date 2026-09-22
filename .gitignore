@@ -1,0 +1,20 @@
+.env
+**/.env
+companion/pairing.txt
+companion/providers.json
+companion/providers.tmp
+companion/data/
+__pycache__/
+*.log
+
+# Local credentials, runtimes, and temporary browser artifacts
+.env.*
+!.env.example
+!**/.env.example
+node_modules/
+.venv/
+*.pem
+*.key
+tests/.runtime-extension/
+playwright-report/
+test-results/
