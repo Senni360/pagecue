@@ -1,0 +1,115 @@
+{
+  "results": [
+    {
+      "name": "YouTube iframe ST persists timestamped captions before question, answers, and QA reuses without fetch",
+      "status": "PASS"
+    },
+    {
+      "name": "School wrapper resolves without playback and limits transcript to the configured clip",
+      "status": "PASS"
+    },
+    {
+      "name": "Unavailable captions preserve active transcript and never prompt question",
+      "status": "PASS"
+    },
+    {
+      "name": "Cancel in-flight caption retrieval ignores late response",
+      "status": "PASS"
+    },
+    {
+      "name": "YouTube source changed during retrieval is rejected",
+      "status": "PASS"
+    }
+  ],
+  "requests": [
+    {
+      "path": "/",
+      "mode": "normal"
+    },
+    {
+      "path": "/favicon.ico",
+      "mode": "normal"
+    },
+    {
+      "path": "/fixture/watch",
+      "mode": "normal"
+    },
+    {
+      "path": "/fixture/api/timedtext",
+      "mode": "normal"
+    },
+    {
+      "path": "/api/openrouter/chat/completions",
+      "mode": "normal"
+    },
+    {
+      "path": "/api/openrouter/chat/completions",
+      "mode": "normal"
+    },
+    {
+      "path": "/",
+      "mode": "normal"
+    },
+    {
+      "path": "/favicon.ico",
+      "mode": "normal"
+    },
+    {
+      "path": "/fixture/qv/example/scripts/core/data.js",
+      "mode": "normal"
+    },
+    {
+      "path": "/fixture/watch",
+      "mode": "normal"
+    },
+    {
+      "path": "/fixture/api/timedtext",
+      "mode": "normal"
+    },
+    {
+      "path": "/",
+      "mode": "normal"
+    },
+    {
+      "path": "/favicon.ico",
+      "mode": "normal"
+    },
+    {
+      "path": "/fixture/watch",
+      "mode": "missing"
+    },
+    {
+      "path": "/",
+      "mode": "normal"
+    },
+    {
+      "path": "/favicon.ico",
+      "mode": "normal"
+    },
+    {
+      "path": "/fixture/watch",
+      "mode": "delay"
+    },
+    {
+      "path": "/",
+      "mode": "normal"
+    },
+    {
+      "path": "/favicon.ico",
+      "mode": "normal"
+    },
+    {
+      "path": "/fixture/watch",
+      "mode": "delay"
+    },
+    {
+      "path": "/fixture/api/timedtext",
+      "mode": "delay"
+    }
+  ],
+  "caveats": [
+    "Isolated Brave with fixture watch/caption endpoints and fake answer provider, no live YouTube or paid API calls.",
+    "Iframe srcdoc avoids contacting or playing YouTube; actual src remains a YouTube embed for detection.",
+    "Temporary test manifest grants all hosts; native permission UI not exercised."
+  ]
+}

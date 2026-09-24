@@ -1,10 +1,10 @@
 {
   "name": "pagecue",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/v03-state.test.mjs tests/v031-providers.test.mjs",
+    "test": "node --test tests/v03-state.test.mjs tests/v031-providers.test.mjs tests/youtube.test.mjs tests/youtube-selection.test.mjs",
     "test:browser": "node tests/v03-browser.cjs",
     "test:content": "node tests/v031-content.cjs"
   },

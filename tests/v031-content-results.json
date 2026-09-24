@@ -28,6 +28,22 @@
     "status": "PASS"
   },
   {
+    "name": "Only focused frame shows picker and selected candidate has one label",
+    "status": "PASS"
+  },
+  {
+    "name": "Uninitialized player explains Play workaround without submitting empty media",
+    "status": "PASS"
+  },
+  {
+    "name": "YouTube embed selected directly without entering frame or playing",
+    "status": "PASS"
+  },
+  {
+    "name": "School YouTube wrapper can be selected before its Play button is pressed",
+    "status": "PASS"
+  },
+  {
     "name": "Rejected blob source allows selecting next downloadable player",
     "status": "PASS"
   },

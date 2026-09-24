@@ -24,9 +24,21 @@
     return [...element.getClientRects()].some(rect => rect.width && rect.height);
   }
   const pickerCandidates = () => [...document.querySelectorAll(mediaSelector + ',iframe')].filter(el => (el instanceof HTMLIFrameElement || isMedia(el)) && isVisible(el));
-  const pickerLabel = el => el instanceof HTMLIFrameElement ? 'Enter to choose audio inside this frame' : 'Enter selects this audio';
+  function youtubeSource(el) {
+    try {
+      const u = new URL(el instanceof HTMLIFrameElement ? el.src : location.href);
+      if (!['https:','http:'].includes(u.protocol) || !['youtube.com','www.youtube.com','m.youtube.com','youtube-nocookie.com','www.youtube-nocookie.com'].includes(u.hostname)) return '';
+      const id = u.pathname === '/watch' ? u.searchParams.get('v') : u.pathname.match(/^\/(?:embed|shorts|live)\/([\w-]{11})(?:\/|$)/)?.[1];
+      return /^[\w-]{11}$/.test(id || '') ? 'https://www.youtube.com/watch?v=' + id : '';
+    } catch { return ''; }
+  }
+  function youtubeWrapper(el) {
+    if(!(el instanceof HTMLIFrameElement))return false;
+    try {const u=new URL(el.src);return u.origin==='https://cdn.eindexamensite.nl'&&!u.username&&!u.password&&/^\/qv\/.+\/index\.html$/.test(u.pathname);}catch{return false;}
+  }
+  const pickerLabel = el => youtubeSource(el) || youtubeWrapper(el) ? 'Enter retrieves YouTube captions - no playback' : el instanceof HTMLIFrameElement ? 'Enter to choose audio inside this frame' : 'Enter selects this audio';
 
-  const mediaURL = el => el?.currentSrc || el?.src || el?.querySelector("source[src]")?.src || el?.href || "";
+  const mediaURL = el => youtubeSource(el) || el?.currentSrc || el?.src || el?.querySelector("source[src]")?.src || el?.href || "";
   let guidedRun = null, cropSurface = null, cropStart = null, cropRect = null, cropViewport = null, cropScroll = null, answerCard = null;
   const keys = new Set();
   let latched = false;
@@ -52,8 +64,10 @@
   function mark(key, target, label, color) {mount(); marks.set(key, {target, label, color}); draw();}
   function draw() {
     if (!layers) return;
+    if (picker === "media" && root) root.style.visibility = document.hasFocus() && !(document.activeElement instanceof HTMLIFrameElement) ? "visible" : "hidden";
     layers.replaceChildren();
     for (const [key, item] of marks) {
+      if (key.startsWith("candidate-") && marks.get("hover")?.target === item.target) continue;
       if (item.target instanceof Element && !item.target.isConnected) {marks.delete(key); continue;}
       const rawRects = item.target instanceof Range ? [...item.target.getClientRects()] : [item.target.getBoundingClientRect()];
       const rects = rawRects.filter((r, i) => !rawRects.some((other, j) => j !== i && other.left <= r.left && other.top <= r.top && other.right >= r.right && other.bottom >= r.bottom && (other.width * other.height > r.width * r.height || j < i && other.width === r.width && other.height === r.height)));
@@ -93,7 +107,7 @@
     if(document.hasFocus() && !(document.activeElement instanceof HTMLIFrameElement))root.focus({preventScroll:true});
     clearCandidates();
     if (mode === "media") {
-      pickerCandidates().forEach((el, i) => marks.set(`candidate-${i}`, {target:el, label:el instanceof HTMLIFrameElement?'Enter to choose audio inside this frame':"Click to select media", color:"#2583e9"}));
+      pickerCandidates().forEach((el, i) => marks.set(`candidate-${i}`, {target:el, label:pickerLabel(el), color:"#2583e9"}));
       mount(); draw();
       hovered=pickerCandidates()[0]||null;
       if(hovered)mark("hover",hovered,pickerLabel(hovered),"#2583e9");
@@ -102,12 +116,17 @@
   }
   function clearCandidates() {for (const key of marks.keys()) if (key.startsWith("candidate-")) marks.delete(key);}
   function chooseMedia(element, forGuided = false) {
-    if(element instanceof HTMLIFrameElement){picker='media';hovered=element;mark('hover',element,'Selecting audio inside this frame · Escape cancels','#2583e9');element.contentWindow?.focus();return;}
+    if(element instanceof HTMLIFrameElement && !youtubeSource(element) && !youtubeWrapper(element)){picker='media';hovered=element;mark('hover',element,'Selecting audio inside this frame · Escape cancels','#2583e9');element.contentWindow?.focus();return;}
     if (element.mediaKeys) {begin('media');say("Protected media is unsupported. Choose another player with arrows, then Enter.", true); return;}
     media = element;
     const id = [...crypto.getRandomValues(new Uint8Array(16))].map(x => x.toString(16).padStart(2,"0")).join("");
     const label = element.getAttribute("aria-label") || element.title || (element.tagName === "A" ? element.textContent : "") || element.closest("figure")?.querySelector("figcaption")?.innerText || `${element.tagName.toLowerCase()} player`;
     const url = mediaURL(element);
+    if (!url) {
+      media = null; begin("media");
+      say("This player has not exposed an audio file yet. Escape to close selection, press Play briefly, then pause and try ST again.", true);
+      return;
+    }
     media.dataset.pagecueId = id;
     const selected = {id,label:label.slice(0,180),url,pageUrl:location.href};
     mark("media", media, forGuided ? 'Selected audio · next: select question' : 'Selected media', "#2583e9");
@@ -140,7 +159,7 @@
   }
   function questionCrop(runId,source,reuse=false) {
     if(document.activeElement instanceof HTMLIFrameElement)document.activeElement.blur();window.focus();
-    mount();root.focus({preventScroll:true});clearCrop();cropRect=null;guidedRun=runId;picker=null;marks.clear();draw();questionRange=question=null;
+    mount();root.style.visibility="visible";root.focus({preventScroll:true});clearCrop();cropRect=null;guidedRun=runId;picker=null;marks.clear();draw();questionRange=question=null;
     answerCard?.remove();
     cropSurface=document.createElement('div');
     cropSurface.style.cssText='position:fixed;inset:0;pointer-events:auto;cursor:crosshair;background:#0c122033;touch-action:none';
@@ -237,6 +256,8 @@
   },true);
   document.addEventListener("keyup", event => {keys.delete(event.key.toLowerCase()); if (!keys.size) latched = false;}, true);
   window.addEventListener("blur", () => {keys.clear(); latched = false;});
+  window.addEventListener("focus", () => {if(picker === "media") draw();});
+  window.addEventListener("blur", () => {if(picker === "media") setTimeout(draw, 0);});
   let redraw;
   const queueDraw = () => {cancelAnimationFrame(redraw); redraw = requestAnimationFrame(draw);};
   window.addEventListener("scroll", queueDraw, true); window.addEventListener("resize", queueDraw);
@@ -246,7 +267,7 @@
     
     if (message.type === "select-media") {guidedRun=null;begin("media"); respond({ok:true});}
     if(message.type==='guided-pick-media'){marks.clear();clearCrop();guidedRun=message.runId;answerCard?.remove();begin('media');respond({ok:true});}
-    if(message.type==='guided-end-picker'){picker=null;hovered=null;clearCandidates();marks.delete('hover');draw();respond({ok:true});}
+    if(message.type==='guided-end-picker'){picker=null;hovered=null;clearCandidates();marks.delete('hover');if(root)root.style.visibility='visible';if(notice)notice.textContent='';draw();respond({ok:true});}
     if(message.type==='guided-question'){questionCrop(message.runId,message.source,message.reuse);respond({ok:true});}
     if(message.type==='guided-validate')respond({ok:guidedRun===message.runId && cropViewport?.width===innerWidth && cropViewport?.height===innerHeight && cropScroll?.x===scrollX && cropScroll?.y===scrollY});
     if(message.type==='guided-hide'){
@@ -266,7 +287,7 @@
       if (message.url && message.url !== location.href) return;
       const target = message.kind === "answer" ? questionRange || question : media;
       if (target) mark(message.kind === "answer" ? "question" : "media", target, message.text, message.error ? "#bd4545" : message.kind === "answer" ? "#9258e8" : "#2583e9");
-      say(message.text); if(message.text.startsWith("Ready")){marks.clear();draw();} respond({ok:true});
+      if(window === window.top)say(message.text); if(message.text.startsWith("Ready")){marks.clear();draw();} respond({ok:true});
     }
   });
 })();

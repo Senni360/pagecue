@@ -1,3 +1,5 @@
+import {resolveYouTubeSelection,clipYouTubeTranscript} from './youtube-selection.js';
+import {fetchYouTubeTranscript} from './youtube.js';
 import {MAX_BYTES,mediaURL,fileExtension} from './core.js';
 import {audioStore} from './audio-store.js';
 import {transcribe,answer} from './providers.js';
@@ -37,7 +39,19 @@ async function execute(job,config,controller) {
 }
 chrome.runtime.onMessage.addListener((m,s,reply)=>{
   if(m.target!=='offscreen'||s.id!==chrome.runtime.id||s.tab||(s.url&&s.url!==chrome.runtime.getURL('background.js')))return;
-  if(m.type==='execute'){
+  if(m.type==='youtube-captions'){
+    if(running){reply({ok:false,error:'The previous operation is still stopping. Try again shortly.'});return;}
+    const controller=new AbortController();running={runId:m.job.runId,controller};reply({ok:true});
+    void (async()=>{
+      try{
+        const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(45000)]);
+        const selection=await resolveYouTubeSelection(m.job.media.url,{signal});
+        const result=clipYouTubeTranscript(await fetchYouTubeTranscript(selection.videoId,{signal}),selection.ranges);
+        signal.throwIfAborted();await report(m.job.runId,'youtube-captions',result);
+      }catch(error){await chrome.runtime.sendMessage({type:'worker-event',runId:m.job.runId,event:'error',error:error.name==='TimeoutError'?'YouTube caption retrieval timed out. Press ST to try again.':error.message}).catch(()=>{});}
+      finally{if(running?.runId===m.job.runId)running=null;}
+    })();
+  }else if(m.type==='execute'){
     if(running){reply({ok:false,error:'The previous operation is still stopping. Try again shortly.'});return;}
     const controller=new AbortController();running={runId:m.job.runId,controller};reply({ok:true});void execute(m.job,m.config,controller);
   }else if(m.type==='abort'){if(running?.runId===m.runId)running.controller.abort();reply({ok:true});}

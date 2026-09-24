@@ -1,3 +1,5 @@
+import {isYouTubeWrapper} from './youtube-selection.js';
+import {youtubeId} from './youtube.js';
 import {mediaURL} from './core.js';
 import {cropScreenshot,validRegion} from './guided.js';
 import {defaults,validateConfig} from './providers.js';
@@ -20,7 +22,7 @@ async function fail(job,error){if((await getJob())?.runId!==job.runId)return;awa
 async function cancel(){const job=await getJob();if(!job)return;await chrome.storage.local.set({activeJob:null,lastJob:job,lastError:'Cancelled. Your saved transcripts are unchanged.'});if(await chrome.offscreen.hasDocument())await chrome.runtime.sendMessage({target:'offscreen',type:'abort',runId:job.runId});await page(job.tabId,{type:'guided-cancelled',runId:job.runId});await status(null,'');}
 async function begin(tab,reuse=false){
   if(await getJob())throw new Error('An operation is active. Escape cancels it; your saved transcript is safe.');
-  validateConfig(await config(),!reuse);
+  validateConfig(await config(),false);
   const d=await chrome.storage.local.get(['transcripts','activeTranscriptId']);const transcript=d.transcripts?.find(x=>x.id===d.activeTranscriptId);
   if(reuse&&!transcript)throw new Error('Select audio with ST first, or restore a transcript from recovery.');
   const job={guided:true,runId:crypto.randomUUID(),audioId:crypto.randomUUID(),kind:reuse?'answer':'transcript',phase:reuse?'select-question':'select-media',tabId:tab.id,pageUrl:tab.url,title:tab.title||tab.url,started:Date.now(),context:reuse?transcript.text:'',transcriptId:reuse?transcript.id:null,source:reuse?transcript.source:''};
@@ -62,7 +64,17 @@ async function question(m,s){
 }
 async function workerEvent(m){
   let job=await getJob();if(!job||job.runId!==m.runId)return {ok:false};
-  if(m.event==='phase'){job={...job,phase:m.phase,heartbeat:Date.now()};await setJob(job);await status(job,m.phase==='fetching'?'Downloading selected audio':m.phase==='transcribing'?'Transcribing selected audio':'Answering from the selected transcript');}
+  if(m.event==='youtube-captions'){
+    if(job.phase!=='fetching-captions'||(job.videoId && m.videoId!==job.videoId)||!m.text?.trim())return {ok:false};
+    if(!(await page(job.tabId,{type:'validate-media',...job.media},job.mediaFrameId))?.ok){await fail(job,'The selected YouTube video changed. Press ST to select it again.');return {ok:false};}
+    const {transcripts=[]}=await chrome.storage.local.get('transcripts');
+    const source=`YouTube captions - ${m.language || 'unknown language'}${m.generated?' - automatic':''}`;
+    const transcript={id:job.runId,kind:'transcript',date:new Date().toISOString(),text:m.text,source,title:m.title||job.title,pageUrl:job.pageUrl,mediaUrl:job.media.url,audioId:null,videoId:m.videoId,language:m.language,generated:m.generated,segments:m.segments,ranges:m.ranges||[]};
+    job={...job,context:m.text,transcriptId:transcript.id,kind:'answer',newTranscript:true,source,videoId:m.videoId,phase:'select-question'};
+    await chrome.storage.local.set({transcripts:[transcript,...transcripts.filter(t=>t.id!==transcript.id)],activeJob:job});
+    if(!await page(job.tabId,{type:'guided-question',runId:job.runId,source,reuse:true},0))await fail(job,'Captions saved. Refresh the page and restore them from recovery to use QA.');
+  }
+  else if(m.event==='phase'){job={...job,phase:m.phase,heartbeat:Date.now()};await setJob(job);await status(job,m.phase==='fetching'?'Downloading selected audio':m.phase==='transcribing'?'Transcribing selected audio':'Answering from the selected transcript');}
   else if(m.event==='structure'){await setJob({...job,structured:m.structured});}
   else if(m.event==='transcript'){
     const {transcripts=[]}=await chrome.storage.local.get('transcripts');const id=job.runId;
@@ -91,12 +103,12 @@ async function retry(m){
   await setJob(job);try{await prepare(job);}catch(e){await fail(job,e.message);}
 }
 async function reveal(tab){const {history=[]}=await chrome.storage.local.get('history');const item=history.find(x=>x.kind==='answer');if(!item)throw new Error('No answer saved yet.');await page(tab.id,{type:'reveal-answer',text:item.text,source:item.source},0);}
-async function checkWorker(){const job=await getJob();if(!job)return;if(job.phase==='capturing-question'&&Date.now()-job.started>60000){await fail(job,'Question capture was interrupted. Reselect with QA or ST.');return;}if(!['fetching','transcribing','answering'].includes(job.phase))return;let ping;if(await chrome.offscreen.hasDocument())ping=await chrome.runtime.sendMessage({target:'offscreen',type:'ping'}).catch(()=>null);if(ping?.runId!==job.runId)await fail(job,'Processing was interrupted. Your transcripts are safe. Retry from recovery.');}
+async function checkWorker(){const job=await getJob();if(!job)return;if(job.phase==='capturing-question'&&Date.now()-job.started>60000){await fail(job,'Question capture was interrupted. Reselect with QA or ST.');return;}if(!['fetching-captions','fetching','transcribing','answering'].includes(job.phase))return;let ping;if(await chrome.offscreen.hasDocument())ping=await chrome.runtime.sendMessage({target:'offscreen',type:'ping'}).catch(()=>null);if(ping?.runId!==job.runId)await fail(job,'Processing was interrupted. Your transcripts are safe. Retry from recovery.');}
 chrome.alarms.onAlarm.addListener(a=>{if(a.name==='worker-watch')void serial(checkWorker);});
 chrome.runtime.onInstalled.addListener(()=>{void serial(async()=>{await chrome.alarms.create('worker-watch',{periodInMinutes:1});});});
 chrome.runtime.onStartup.addListener(()=>{void serial(async()=>{const job=await getJob();if(job)await fail(job,'Chrome closed during this operation. Retry or reselect from recovery.');await chrome.alarms.create('worker-watch',{periodInMinutes:1});});});
 chrome.windows.onRemoved.addListener(windowId=>{void serial(async()=>{const job=await getJob();if(job?.phase==='awaiting-media-access'&&job.permissionWindowId===windowId)await cancel();});});
-chrome.tabs.onRemoved.addListener(tabId=>{void serial(async()=>{const job=await getJob();if(job?.tabId===tabId&&['select-media','select-question','awaiting-media-access','capturing-question'].includes(job.phase))await cancel();});});
+chrome.tabs.onRemoved.addListener(tabId=>{void serial(async()=>{const job=await getJob();if(job?.tabId===tabId&&['select-media','select-question','awaiting-media-access','capturing-question','fetching-captions'].includes(job.phase))await cancel();});});
 chrome.commands.onCommand.addListener(command=>{void serial(async()=>{const tab=await active();if(command==='guided')await begin(tab);if(command==='ask')await begin(tab,true);if(command==='reveal')await reveal(tab);}).catch(async e=>{await chrome.storage.local.set({lastError:e.message});const tab=await active().catch(()=>null);await status(tab?{tabId:tab.id}:null,e.message,true);});});
 chrome.runtime.onMessage.addListener((m,s,reply)=>{
   if(m.target==='offscreen')return;
@@ -108,7 +120,24 @@ chrome.runtime.onMessage.addListener((m,s,reply)=>{
       case 'guided-start':await begin(s.tab);break;
       case 'qa-start':await begin(s.tab,true);break;
       case 'reveal':await reveal(s.tab);break;
-      case 'guided-media':{const job=await match(m,s,'select-media');mediaURL(m.media.url);const media={id:m.media.id,url:m.media.url,label:String(m.media.label).slice(0,180),pageUrl:m.media.pageUrl};const valid=await page(job.tabId,{type:'validate-media',...media},s.frameId||0);if(!valid?.ok)throw new Error('The audio selection changed. Select it again.');await setJob({...job,media,source:media.label,mediaFrameId:s.frameId||0,phase:'select-question'});await page(job.tabId,{type:'guided-end-picker',runId:job.runId});await page(job.tabId,{type:'guided-question',runId:job.runId,source:media.label},0);break;}
+      case 'guided-media':{
+        const job=await match(m,s,'select-media');mediaURL(m.media.url);
+        const media={id:m.media.id,url:m.media.url,label:String(m.media.label).slice(0,180),pageUrl:m.media.pageUrl};
+        const valid=await page(job.tabId,{type:'validate-media',...media},s.frameId||0);
+        if(!valid?.ok)throw new Error('The audio selection changed. Select it again.');
+        const videoId=youtubeId(media.url);
+        const captions=!!videoId||isYouTubeWrapper(media.url);
+        const next={...job,media,source:captions?'YouTube captions':media.label,mediaFrameId:s.frameId||0,phase:captions?'fetching-captions':'select-question',...(captions?{videoId,audioId:null}:{})};
+        await setJob(next);await page(job.tabId,{type:'guided-end-picker',runId:job.runId});
+        if(captions){
+          try{
+            await offscreen();await status(next,'Retrieving YouTube captions - no playback');
+            const result=await chrome.runtime.sendMessage({target:'offscreen',type:'youtube-captions',job:next});
+            if(!result?.ok)await fail(next,result?.error||'Caption worker unavailable. Press ST to try again.');
+          }catch(e){await fail(next,e.message);}
+        }else await page(job.tabId,{type:'guided-question',runId:job.runId,source:media.label},0);
+        break;
+      }
       case 'guided-question-ready':await question(m,s);break;
       case 'guided-cancel':{const job=await getJob();if(job){await match({...m,runId:m.runId||job.runId},s);await cancel();}break;}
       case 'guided-resume':{const job=await match(m,s,'awaiting-media-access');try{await prepare(job);}catch(e){await fail(job,e.message);}break;}

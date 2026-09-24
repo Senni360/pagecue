@@ -1,4 +1,4 @@
-# PageCue 0.3.2 — extension only
+# PageCue 0.4.0 — extension only
 
 PageCue downloads selected audio, transcribes it through your chosen API, and answers a selected question using that transcript. Everything runs inside Chrome. The Python companion and launchers are legacy files and are not used by this version. The original script is preserved.
 
@@ -17,13 +17,21 @@ The letter shortcuts are held chords, not typed sequences, and do not activate i
 
 | Shortcut | Action |
 | --- | --- |
-| S + T / Alt+Shift+T | Select a downloadable audio player or link, then a question and all its choices. Download, transcribe, and answer automatically. |
+| S + T / Alt+Shift+T | Select downloadable audio or a YouTube embed, then a question and all its choices. Download, transcribe, and answer automatically. |
 | Q + A / Alt+Shift+Q | Select a new question using the active saved transcript. No audio download or transcription. |
 | R + A / Alt+Shift+A | Reveal/hide the latest saved answer. |
 | Escape | Cancel the current selection/request or dismiss the answer. |
 | Alt+Shift+R | Open recovery and history. |
 
 In the media picker, Up/Down or Tab cycles candidates and Enter selects. Mouse selection also works. In the question picker, arrows move the rectangle, Shift+arrows resize it, and Enter submits; alternatively drag a rectangle with the mouse. Blue marks the audio being downloaded; purple marks the question. Routine answers stay hidden until revealed. Short status cues identify progress/errors.
+
+## YouTube embeds without playback
+
+ST recognizes `youtube.com` and `youtube-nocookie.com` embeds directly. It also recognizes the eindexamensite CDN LesLinq wrapper before Play is pressed, resolves its configured video, and limits captions to its configured clip intervals. Enter on the embed retrieves accessible public captions before opening question selection. No video playback, recording, audio upload, or transcription API key is needed for this path. Your configured answer/extraction providers still answer the question.
+
+Captions retain their language, timestamps, and automatic-caption label. PageCue prefers a human caption track in the default audio language when available and does not request translation. The completed transcript is saved before question selection. A successful answer makes it active for QA; if you cancel first, open recovery and choose **Use this transcript**.
+
+Reloading this version requires access to `https://www.youtube.com/*` and `https://cdn.eindexamensite.nl/*`. The request reads the public watch page and caption endpoint without sending your YouTube cookies. Caption access is best effort: consent/login restrictions, bot checks, missing tracks, or empty caption responses stop with an error and preserve your previous active transcript. There is no silent recording fallback. This path saves text, not an audio file.
 
 ## Recovery
 
@@ -48,13 +56,13 @@ Jev receives separate question text, original answer labels/text, and transcript
 
 ## Limits and storage
 
-Direct HTTP(S) media files only; no tab recording fallback, blob-player extraction, streaming playlist conversion, or DRM support. A downloadable audio URL is required. Requests include available cookies, but a host can still require special authorization or deny extension downloads. Reselect expired signed URLs. Files are capped at 24 MB; no automatic splitting/transcoding. Provider format/model limits still apply.
+Audio downloads support direct HTTP(S) media files; YouTube has a separate captions-only path. There is no tab recording fallback, blob-player extraction, streaming playlist conversion, or DRM support. A downloadable audio URL is required outside the YouTube captions path. Requests include available cookies, but a host can still require special authorization or deny extension downloads. Reselect expired signed URLs. Files are capped at 24 MB; no automatic splitting/transcoding. Provider format/model limits still apply.
 
 Keys are in Chrome local extension storage, restricted to trusted extension contexts, not sync storage or page scripts. Local storage is not an encrypted vault. Audio blobs are cached in extension IndexedDB; transcripts, crops and answers persist in the browser profile without automatic deletion. Uninstalling the extension clears its browser storage. Legacy companion data is separate and untouched. Selected content goes directly to the selected providers; Jev extraction sends the question/crop to the extraction provider, then structured question and transcript to Jev.
 
 ## Validation status
 
-The second bounded pass completed 62 non-paid checks and six small live Jev decisions successfully after fixes. It covered real Brave ST/QA, interrupted work, transcript recovery, malformed downloads, focused inputs and iframe keyboard selection. Live screenshot extraction used Qwen3.8 Flash before Jev. These synthetic cases are not a general accuracy benchmark. Native permission acceptance and authenticated third-party sites still need checking. See [the current report](tests/V032-REPORT.md), [test instructions](tests/README.md), and [the first-pass report](tests/V03-REPORT.md).
+The second bounded pass completed 62 non-paid checks and six small live Jev decisions successfully after fixes. It covered real Brave ST/QA, interrupted work, transcript recovery, malformed downloads, focused inputs and iframe keyboard selection. Live screenshot extraction used Qwen3.8 Flash before Jev. These synthetic cases are not a general accuracy benchmark. Native permission acceptance and authenticated third-party sites still need checking. See [the v0.4 report](tests/V04-REPORT.md) for YouTube changes and [the previous report](tests/V032-REPORT.md), [test instructions](tests/README.md), and [the first-pass report](tests/V03-REPORT.md).
 
 ## API references
 
