@@ -31,7 +31,7 @@
       "mode": "normal"
     },
     {
-      "path": "/fixture/watch",
+      "path": "/fixture/youtubei/v1/player",
       "mode": "normal"
     },
     {
@@ -59,7 +59,7 @@
       "mode": "normal"
     },
     {
-      "path": "/fixture/watch",
+      "path": "/fixture/youtubei/v1/player",
       "mode": "normal"
     },
     {
@@ -75,6 +75,10 @@
       "mode": "normal"
     },
     {
+      "path": "/fixture/youtubei/v1/player",
+      "mode": "missing"
+    },
+    {
       "path": "/fixture/watch",
       "mode": "missing"
     },
@@ -87,7 +91,7 @@
       "mode": "normal"
     },
     {
-      "path": "/fixture/watch",
+      "path": "/fixture/youtubei/v1/player",
       "mode": "delay"
     },
     {
@@ -99,7 +103,7 @@
       "mode": "normal"
     },
     {
-      "path": "/fixture/watch",
+      "path": "/fixture/youtubei/v1/player",
       "mode": "delay"
     },
     {

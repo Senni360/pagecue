@@ -1,5 +1,5 @@
 import {isYouTubeWrapper} from './youtube-selection.js';
-import {youtubeId} from './youtube.js';
+import {youtubeId,PLAYER_API} from './youtube.js';
 import {mediaURL} from './core.js';
 import {cropScreenshot,validRegion} from './guided.js';
 import {defaults,validateConfig} from './providers.js';
@@ -7,6 +7,8 @@ import {audioStore} from './audio-store.js';
 let creating,queue=Promise.resolve();
 const ready=(async()=>{
   await chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
+  // YouTube rejects InnerTube requests carrying an extension Origin; strip it for PageCue's own caption lookups only.
+  await chrome.declarativeNetRequest.updateSessionRules({removeRuleIds:[1],addRules:[{id:1,priority:1,action:{type:'modifyHeaders',requestHeaders:[{header:'origin',operation:'remove'}]},condition:{urlFilter:'|'+PLAYER_API,initiatorDomains:[chrome.runtime.id],resourceTypes:['xmlhttprequest']}}]});
   const d=await chrome.storage.local.get(['schemaVersion','history','transcripts']);
   if(d.schemaVersion!==3){const transcripts=d.transcripts||(d.history||[]).filter(x=>x.kind==='transcript');await chrome.storage.local.set({schemaVersion:3,transcripts,activeTranscriptId:transcripts[0]?.id||null,activeJob:null});}
 })();

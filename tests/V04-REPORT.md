@@ -30,3 +30,11 @@ Therefore this release supports accessible public captions but does not demonstr
 ## Usage
 
 Reload PageCue at brave://extensions, accept the YouTube site-access permission if prompted, and refresh the page. Press ST (or Alt+Shift+T for screenshot authorization), select the YouTube embed, and press Enter. When captions are available, select the question and choices. If retrieval fails, use ST to reselect or restore an existing transcript in recovery. Captions saved before a cancelled question can be activated with Use this transcript, then QA.
+
+## Addendum 2026-09-28 - live captions working
+
+Cause of the empty responses: web watch-page caption URLs now carry `exp=xpe` and return 404/empty without a proof-of-origin token. Caption URLs from the InnerTube player API with the iOS client do not require one. That API returns 403 when the request carries a `chrome-extension://` Origin, so a `declarativeNetRequest` session rule (`declarativeNetRequestWithHostAccess`, no install warning) removes Origin only for PageCue-initiated requests to `/youtubei/v1/player`.
+
+ST now uses InnerTube first and the watch page as a fallback. If InnerTube returns a player response that is rejected (different video, unplayable, no tracks), that error is shown. Transport failures show the fallback's error instead.
+
+Verification: `npm test` 49/49 (four new InnerTube tests), Brave fixture integration 5/5 (now asserts no watch-page fallback), and a live run of the unmodified extension in Brave: 8LAFIDR56Sw returned 285 manual English segments, 16 after clipping to 0-56 s; dQw4w9WgXcQ returned 61. The iOS client version is hard-coded and may need a bump if YouTube retires it.

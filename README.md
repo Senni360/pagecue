@@ -31,7 +31,7 @@ ST recognizes `youtube.com` and `youtube-nocookie.com` embeds directly. It also 
 
 Captions retain their language, timestamps, and automatic-caption label. PageCue prefers a human caption track in the default audio language when available and does not request translation. The completed transcript is saved before question selection. A successful answer makes it active for QA; if you cancel first, open recovery and choose **Use this transcript**.
 
-Reloading this version requires access to `https://www.youtube.com/*` and `https://cdn.eindexamensite.nl/*`. The request reads the public watch page and caption endpoint without sending your YouTube cookies. Caption access is best effort: consent/login restrictions, bot checks, missing tracks, or empty caption responses stop with an error and preserve your previous active transcript. There is no silent recording fallback. This path saves text, not an audio file.
+Reloading this version requires access to `https://www.youtube.com/*` and `https://cdn.eindexamensite.nl/*`. The request asks YouTube's player API (as the iOS client) for caption tracks, falling back to the public watch page, and never sends your YouTube cookies. A session network rule removes the extension `Origin` header from PageCue's own player API requests only, because YouTube rejects it. Caption access is best effort: consent/login restrictions, bot checks, missing tracks, or empty caption responses stop with an error and preserve your previous active transcript. There is no silent recording fallback. This path saves text, not an audio file.
 
 ## Recovery
 

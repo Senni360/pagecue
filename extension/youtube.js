@@ -1,5 +1,9 @@
 const ID = /^[A-Za-z0-9_-]{11}$/;
 const NO_CAPTIONS = 'YouTube captions are unavailable for this video. Your previous transcript has been kept. No playback or recording was started.';
+const NOT_EXPOSED = 'YouTube did not expose public captions. It may require sign-in or be blocking access. Your previous transcript has been kept.';
+export const PLAYER_API = 'https://www.youtube.com/youtubei/v1/player';
+// Web watch-page caption URLs now require a proof-of-origin token (exp=xpe); the iOS client's URLs do not.
+const IOS_CLIENT = {clientName:'IOS', clientVersion:'20.10.4', deviceModel:'iPhone16,2', hl:'en'};
 
 export function youtubeId(value) {
   if (typeof value !== 'string') return null;
@@ -79,6 +83,23 @@ function parseCaptions(text) {
   return segments.sort((a,b) => a.start - b.start);
 }
 
+function captionTrack(player, videoId) {
+  if (!player || typeof player !== 'object') throw new Error(NOT_EXPOSED);
+  if (player.videoDetails?.videoId !== videoId) throw new Error('YouTube returned a different video. No transcript was saved.');
+  if (player.playabilityStatus?.status && player.playabilityStatus.status !== 'OK') throw new Error(NO_CAPTIONS);
+  return chooseTrack(player.captions?.playerCaptionsTracklistRenderer);
+}
+
+async function innertubePlayer(videoId, options, fetchImpl) {
+  const body = JSON.stringify({context:{client:IOS_CLIENT}, videoId});
+  const text = await readLimited(await fetchImpl(`${PLAYER_API}?prettyPrint=false`, {...options, method:'POST', headers:{'Content-Type':'application/json'}, body}), 5_000_000);
+  try { return JSON.parse(text); } catch { throw new Error(NOT_EXPOSED); }
+}
+
+async function watchPagePlayer(videoId, options, fetchImpl) {
+  return playerResponse(await readLimited(await fetchImpl(`https://www.youtube.com/watch?v=${videoId}`, options), 8_000_000));
+}
+
 function timestamp(seconds) { const n = Math.floor(seconds); return `${String(Math.floor(n/3600)).padStart(2,'0')}:${String(Math.floor(n/60)%60).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`; }
 
 export async function fetchYouTubeTranscript(videoId, {signal, fetchImpl = fetch} = {}) {
@@ -90,12 +111,13 @@ export async function fetchYouTubeTranscript(videoId, {signal, fetchImpl = fetch
   const options = {signal:controller.signal, credentials:'omit', redirect:'error', cache:'no-store'};
   try {
     controller.signal.throwIfAborted();
-    const html = await readLimited(await fetchImpl(`https://www.youtube.com/watch?v=${videoId}`, options), 8_000_000);
-    const player = playerResponse(html);
-    if (!player) throw new Error('YouTube did not expose public captions. It may require sign-in or be blocking access. Your previous transcript has been kept.');
-    if (player.videoDetails?.videoId !== videoId) throw new Error('YouTube returned a different video. No transcript was saved.');
-    if (player.playabilityStatus?.status && player.playabilityStatus.status !== 'OK') throw new Error(NO_CAPTIONS);
-    const track = chooseTrack(player.captions?.playerCaptionsTracklistRenderer);
+    let player, track, rejected;
+    try { player = await innertubePlayer(videoId, options, fetchImpl); } catch (error) { if (controller.signal.aborted) throw error; }
+    try { if (player) track = captionTrack(player, videoId); } catch (error) { rejected = error; }
+    if (!track) {
+      // Fall back to the public watch page. A rejected InnerTube answer is more specific than a fallback failure.
+      try { player = await watchPagePlayer(videoId, options, fetchImpl); track = captionTrack(player, videoId); } catch (error) { throw rejected || error; }
+    }
     const segments = parseCaptions(await readLimited(await fetchImpl(timedTextURL(track, videoId), options), 5_000_000));
     return {videoId, text:segments.map(s => `[${timestamp(s.start)}] ${s.text}`).join('\n'), segments, language:typeof track.languageCode === 'string' ? track.languageCode : '', generated:track.kind === 'asr', title:typeof player.videoDetails.title === 'string' ? player.videoDetails.title : 'YouTube video'};
   } catch (error) {

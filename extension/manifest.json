@@ -11,7 +11,8 @@
     "downloads",
     "offscreen",
     "alarms",
-    "clipboardWrite"
+    "clipboardWrite",
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
     "https://api.openai.com/*",
