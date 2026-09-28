@@ -4,6 +4,12 @@
   let root, shadow, notice, layers, picker = null, hovered = null, question = null, media = null;
   let questionText = "", questionRange = null, currentURL = location.href;
   let cropKeyboard = null;
+  // Minimal HUD by default; the optional "hints" setting restores full instructions.
+  let hints = false;
+  try {
+    chrome.storage?.sync?.get('hudHints').then(v => {hints = !!v?.hudHints;}, () => {});
+    chrome.storage?.onChanged?.addListener((changes, area) => {if (area === 'sync' && changes.hudHints) hints = !!changes.hudHints.newValue;});
+  } catch {}
   const mediaSelector = 'video,audio,a[href]';
   const isMedia = el => {
     if(el?.matches('video,audio'))return true;
@@ -37,6 +43,19 @@
     try {const u=new URL(el.src);return u.origin==='https://cdn.eindexamensite.nl'&&!u.username&&!u.password&&/^\/qv\/.+\/index\.html$/.test(u.pathname);}catch{return false;}
   }
   const pickerLabel = el => youtubeSource(el) || youtubeWrapper(el) ? 'Enter retrieves YouTube captions - no playback' : el instanceof HTMLIFrameElement ? 'Enter to choose audio inside this frame' : 'Enter selects this audio';
+  function hudName(el) {
+    if (youtubeSource(el)) return 'YouTube';
+    if (youtubeWrapper(el)) return 'YouTube · school';
+    if (el instanceof HTMLIFrameElement) return 'iframe';
+    const tag = el.tagName.toLowerCase(), name = (el.getAttribute('aria-label') || el.title || (tag === 'a' ? el.textContent : '') || '').trim().slice(0, 32);
+    return name ? `${tag} ${name}` : tag;
+  }
+  const hudKey = el => youtubeSource(el) || youtubeWrapper(el) ? '↵ captions' : el instanceof HTMLIFrameElement ? '↵ enter frame' : '↵';
+  function hoverMark(el) {
+    if (hints) return mark('hover', el, pickerLabel(el), '#2583e9');
+    const all = pickerCandidates(), i = all.indexOf(el);
+    mark('hover', el, hudName(el), '#2583e9', [i >= 0 ? `${i + 1}/${all.length}` : '', hudKey(el)].filter(Boolean).join(' · '), true);
+  }
 
   const mediaURL = el => youtubeSource(el) || el?.currentSrc || el?.src || el?.querySelector("source[src]")?.src || el?.href || "";
   let guidedRun = null, cropSurface = null, cropStart = null, cropRect = null, cropViewport = null, cropScroll = null, answerCard = null;
@@ -51,17 +70,33 @@
     root.tabIndex = -1;
     shadow = root.attachShadow({mode: "closed"});
     const style = document.createElement("style");
-    style.textContent = `:host{all:initial}*{box-sizing:border-box}.box{position:fixed;border:2px solid var(--color);background:color-mix(in srgb,var(--color) 9%,transparent);border-radius:5px;pointer-events:none}.tag{position:absolute;left:-2px;top:0;transform:translateY(-100%);background:var(--color);color:white;padding:4px 8px;font:600 11px/1.3 system-ui;border-radius:4px 4px 0 0;max-width:460px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.notice{position:fixed;right:20px;bottom:20px;max-width:410px;padding:12px 16px;background:#17202dee;color:#f6f8ff;border:1px solid #ffffff22;border-radius:12px;box-shadow:0 8px 24px #0003;font:13px/1.5 system-ui;white-space:pre-wrap}.notice:empty{display:none}`;
+    // DevTools-inspector look: hairline outline, tinted fill, small white tooltip beside the element.
+    style.textContent = `:host{all:initial}*{box-sizing:border-box}.box{position:fixed;border:1px solid var(--color);background:color-mix(in srgb,var(--color) 22%,transparent);pointer-events:none}.box.ghost{border-style:dashed;background:none;opacity:.55}.tag{position:absolute;left:-1px;top:calc(100% + 6px);background:#fff;color:#333;padding:3px 7px;font:11px/1.4 system-ui,sans-serif;border-radius:3px;box-shadow:0 1px 4px #0005;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tag.above{top:auto;bottom:calc(100% + 6px)}.tag.inside{top:4px;left:4px}.tag b{color:var(--color);font-weight:600}.tag i{font-style:normal;color:#888;margin-left:6px;white-space:pre}.notice{position:fixed;right:12px;bottom:12px;max-width:320px;padding:4px 9px;background:#202124ee;color:#e8eaed;border-radius:3px;box-shadow:0 1px 4px #0006;font:11px/1.45 system-ui,sans-serif;white-space:pre-wrap}.notice.err{background:#3c1f1fee;color:#ffb4ab}.notice:empty{display:none}`;
     layers = document.createElement("div");
     notice = document.createElement("div"); notice.className = "notice"; notice.setAttribute("role", "status");
     shadow.append(style, layers, notice); document.documentElement.append(root);
   }
   let timer;
-  function say(text, persist = false) {
-    mount(); clearTimeout(timer); notice.textContent = `PageCue · ${text}`;
-    if (!persist) timer = setTimeout(() => {notice.textContent = "";}, 6500);
+  function say(text, persist = false, error = false) {
+    mount(); clearTimeout(timer); notice.textContent = hints ? `PageCue · ${text}` : text; notice.classList.toggle('err', error);
+    if (!persist) timer = setTimeout(() => {notice.textContent = "";}, hints ? 6500 : 3500);
   }
-  function mark(key, target, label, color) {mount(); marks.set(key, {target, label, color}); draw();}
+  function mark(key, target, label, color, meta = '', dims = false) {mount(); marks.set(key, {target, label, color, meta, dims}); draw();}
+  function tagFor(item, r) {
+    const tag = document.createElement("span"); tag.className = "tag";
+    const name = document.createElement("b"); name.textContent = item.label; tag.append(name);
+    const meta = [item.dims ? `${Math.round(r.width)} × ${Math.round(r.height)}` : '', item.meta].filter(Boolean).join(' · ');
+    if (meta) {const extra = document.createElement("i"); extra.textContent = meta; tag.append(extra);}
+    return tag;
+  }
+  // Keep the tooltip on screen: below the element, else above, else inside its top-left corner.
+  function placeTag(tag, r) {
+    tag.classList.remove('above', 'inside'); tag.style.left = '';
+    if (r.bottom + 30 > innerHeight) tag.classList.add(r.top > 30 ? 'above' : 'inside');
+    const t = tag.getBoundingClientRect();
+    if (t.left < 4) tag.style.left = `${4 - r.left}px`;
+    else if (t.right > innerWidth - 4) tag.style.left = `${innerWidth - 4 - t.width - r.left}px`;
+  }
   function draw() {
     if (!layers) return;
     if (picker === "media" && root) root.style.visibility = document.hasFocus() && !(document.activeElement instanceof HTMLIFrameElement) ? "visible" : "hidden";
@@ -73,7 +108,7 @@
       const rects = rawRects.filter((r, i) => !rawRects.some((other, j) => j !== i && other.left <= r.left && other.top <= r.top && other.right >= r.right && other.bottom >= r.bottom && (other.width * other.height > r.width * r.height || j < i && other.width === r.width && other.height === r.height)));
       rects.slice(0, 150).forEach((r, i) => {
         if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight) return;
-        const box = document.createElement("div"); box.className = "box";
+        const box = document.createElement("div"); box.className = key.startsWith("candidate-") && !hints ? "box ghost" : "box";
         box.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;--color:${item.color}`;
         // Native media controls can swallow clicks. In picker mode, intercept on
         // the visible highlight so choosing a player does not press Play/Seek.
@@ -81,8 +116,10 @@
           box.style.pointerEvents = "auto";
           box.addEventListener("pointerenter", () => {hovered = item.target;});
         }
-        if (i === 0) {const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = item.label; if (r.top < 24) tag.style.transform = "none"; box.append(tag);}
+        const tag = i === 0 && item.label && box.className === "box" ? tagFor(item, r) : null;
+        if (tag) box.append(tag);
         layers.append(box);
+        if (tag) placeTag(tag, r);
       });
     }
   }
@@ -107,16 +144,16 @@
     if(document.hasFocus() && !(document.activeElement instanceof HTMLIFrameElement))root.focus({preventScroll:true});
     clearCandidates();
     if (mode === "media") {
-      pickerCandidates().forEach((el, i) => marks.set(`candidate-${i}`, {target:el, label:pickerLabel(el), color:"#2583e9"}));
+      pickerCandidates().forEach((el, i) => marks.set(`candidate-${i}`, {target:el, label:hints ? pickerLabel(el) : '', color:"#2583e9"}));
       mount(); draw();
       hovered=pickerCandidates()[0]||null;
-      if(hovered)mark("hover",hovered,pickerLabel(hovered),"#2583e9");
+      if(hovered)hoverMark(hovered);
     }
-    say("Arrows or Tab choose audio; Enter selects. You can also click a player or download link. Escape cancels.", true);
+    say(hints ? "Arrows or Tab choose audio; Enter selects. You can also click a player or download link. Escape cancels." : "Audio · ↑↓ · ↵ · Esc", true);
   }
   function clearCandidates() {for (const key of marks.keys()) if (key.startsWith("candidate-")) marks.delete(key);}
   function chooseMedia(element, forGuided = false) {
-    if(element instanceof HTMLIFrameElement && !youtubeSource(element) && !youtubeWrapper(element)){picker='media';hovered=element;mark('hover',element,'Selecting audio inside this frame · Escape cancels','#2583e9');element.contentWindow?.focus();return;}
+    if(element instanceof HTMLIFrameElement && !youtubeSource(element) && !youtubeWrapper(element)){picker='media';hovered=element;mark('hover',element,hints?'Selecting audio inside this frame · Escape cancels':'iframe','#2583e9',hints?'':'inside  Esc');element.contentWindow?.focus();return;}
     if (element.mediaKeys) {begin('media');say("Protected media is unsupported. Choose another player with arrows, then Enter.", true); return;}
     media = element;
     const id = [...crypto.getRandomValues(new Uint8Array(16))].map(x => x.toString(16).padStart(2,"0")).join("");
@@ -129,7 +166,7 @@
     }
     media.dataset.pagecueId = id;
     const selected = {id,label:label.slice(0,180),url,pageUrl:location.href};
-    mark("media", media, forGuided ? 'Selected audio · next: select question' : 'Selected media', "#2583e9");
+    mark("media", media, hints ? (forGuided ? 'Selected audio · next: select question' : 'Selected media') : hudName(media), "#2583e9", hints ? '' : '✓');
     void send({type: "media-selected", media:selected});
     if (forGuided) void send({type:'guided-media',runId:guidedRun,media:selected}).then(result=>{if(result?.error)begin('media');});
     else say("Media selected. Open PageCue to download the file, or use ST to transcribe and answer.");
@@ -162,13 +199,12 @@
     mount();root.style.visibility="visible";root.focus({preventScroll:true});clearCrop();cropRect=null;guidedRun=runId;picker=null;marks.clear();draw();questionRange=question=null;
     answerCard?.remove();
     cropSurface=document.createElement('div');
-    cropSurface.style.cssText='position:fixed;inset:0;pointer-events:auto;cursor:crosshair;background:#0c122033;touch-action:none';
-    const box=document.createElement('div');
-    box.style.cssText='position:fixed;border:2px solid #9258e8;background:#9258e822;pointer-events:none';
+    cropSurface.style.cssText=`position:fixed;inset:0;pointer-events:auto;cursor:crosshair;touch-action:none${hints?';background:#0c122033':''}`;
+    const box=document.createElement('div');box.className='box';box.style.setProperty('--color','#9258e8');box.style.background='#9258e814';
     cropSurface.append(box);shadow.append(cropSurface);
     // Keep instructions above the dimmer without allowing them to steal the drag.
     shadow.append(notice);
-    say(`${reuse ? "Using transcript" : "Audio selected"}: ${source}\nArrows move the box; Shift+arrows resize; Enter submits. Or drag around the question AND choices. Escape cancels.`,true);
+    say(hints ? `${reuse ? "Using transcript" : "Audio selected"}: ${source}\nArrows move the box; Shift+arrows resize; Enter submits. Or drag around the question AND choices. Escape cancels.` : "Question + choices · drag or arrows · ⇧ resize · ↵ · Esc",true);
     const position=e=>({x:Math.max(0,Math.min(innerWidth,e.clientX)),y:Math.max(0,Math.min(innerHeight,e.clientY))});
     cropSurface.addEventListener('pointerdown',e=>{
       if(e.button!==0)return;e.preventDefault();cropStart=position(e);cropSurface.setPointerCapture(e.pointerId);
@@ -177,7 +213,7 @@
     cropSurface.addEventListener('pointermove',e=>{
       if(!cropStart)return;const p=position(e);
       cropRect={x:Math.min(cropStart.x,p.x),y:Math.min(cropStart.y,p.y),width:Math.abs(p.x-cropStart.x),height:Math.abs(p.y-cropStart.y)};
-      Object.assign(box.style,{left:cropRect.x+'px',top:cropRect.y+'px',width:cropRect.width+'px',height:cropRect.height+'px'});
+      paint();
     });
     cropSurface.addEventListener('wheel',e=>e.preventDefault(),{passive:false});
     async function submitCrop() {
@@ -190,7 +226,12 @@
     cropSurface.addEventListener('pointerup',e=>{if(!cropStart)return;e.preventDefault();const q=position(e);cropRect={x:Math.min(cropStart.x,q.x),y:Math.min(cropStart.y,q.y),width:Math.abs(q.x-cropStart.x),height:Math.abs(q.y-cropStart.y)};void submitCrop();});
     cropViewport={width:innerWidth,height:innerHeight};cropScroll={x:scrollX,y:scrollY};
     cropRect={x:Math.round(innerWidth*.2),y:Math.round(innerHeight*.2),width:Math.round(innerWidth*.6),height:Math.round(innerHeight*.5)};
-    const paint=()=>Object.assign(box.style,{left:cropRect.x+'px',top:cropRect.y+'px',width:cropRect.width+'px',height:cropRect.height+'px'});paint();
+    function paint(){
+      Object.assign(box.style,{left:cropRect.x+'px',top:cropRect.y+'px',width:cropRect.width+'px',height:cropRect.height+'px'});
+      const r={left:cropRect.x,top:cropRect.y,width:cropRect.width,height:cropRect.height,bottom:cropRect.y+cropRect.height};
+      const tag=tagFor({label:'question',meta:'',dims:true},r);box.replaceChildren(tag);placeTag(tag,r);
+    }
+    paint();
     cropKeyboard=e=>{
       if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter'].includes(e.key))return false;
       e.preventDefault();e.stopImmediatePropagation();
@@ -203,11 +244,11 @@
 
   function showAnswer(message) {
     mount();answerCard?.remove();answerCard=document.createElement('div');
-    answerCard.style.cssText='position:fixed;right:20px;bottom:20px;width:min(440px,calc(100vw - 40px));max-height:55vh;overflow:auto;pointer-events:auto;user-select:text;background:#17202d;color:#f6f8ff;border:1px solid #9258e8;border-radius:12px;padding:18px;box-shadow:0 8px 32px #0005;font:14px/1.6 system-ui';
-    const title=document.createElement('strong');title.textContent='Answer from selected audio';
-    const close=document.createElement('button');close.textContent='×';close.setAttribute('aria-label','Close answer');close.style.cssText='float:right;background:transparent;border:0;color:white;font-size:22px;cursor:pointer';close.onclick=()=>answerCard.remove();
-    const text=document.createElement('div');text.style.cssText='white-space:pre-wrap;margin-top:10px';text.textContent=message.text;
-    const source=document.createElement('div');source.style.cssText='font-size:11px;color:#bba6e3;margin-top:12px';source.textContent=message.source;
+    answerCard.style.cssText='position:fixed;right:12px;bottom:12px;width:min(340px,calc(100vw - 24px));max-height:45vh;overflow:auto;pointer-events:auto;user-select:text;background:#202124f2;color:#e8eaed;border-left:2px solid #9258e8;border-radius:3px;padding:8px 10px;box-shadow:0 1px 6px #0006;font:12px/1.5 system-ui,sans-serif';
+    const title=document.createElement('strong');title.textContent='Answer';title.style.cssText='font-size:11px;color:#9aa0a6;font-weight:600';
+    const close=document.createElement('button');close.textContent='×';close.setAttribute('aria-label','Close answer');close.style.cssText='float:right;background:transparent;border:0;color:#9aa0a6;font-size:15px;line-height:1;padding:0 2px;cursor:pointer';close.onclick=()=>answerCard.remove();
+    const text=document.createElement('div');text.style.cssText='white-space:pre-wrap;margin-top:4px';text.textContent=message.text;
+    const source=document.createElement('div');source.style.cssText='font-size:10px;color:#9aa0a6;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';source.textContent=message.source;source.title=message.source||'';
     answerCard.append(close,title,text,source);shadow.append(answerCard);notice.textContent='';
   }
   document.addEventListener("mousemove", event => {
@@ -221,7 +262,8 @@
       if ([document.body, document.documentElement].includes(target)) target = null;
     }
     hovered = target;
-    if (target) mark("hover", target, picker === "media" ? "Click to select media" : "Click to select question + choices", picker === "media" ? "#2583e9" : "#9258e8");
+    if (target && picker === "media") hoverMark(target);
+    else if (target) mark("hover", target, "Click to select question + choices", "#9258e8");
     else {marks.delete("hover"); draw();}
   }, true);
   document.addEventListener("click", event => {
@@ -246,7 +288,7 @@
       if(!candidates.length){say('No visible player or download link in this frame.');return;}
       if(event.key==='Enter'){const target=hovered||candidates[0];picker=null;clearCandidates();marks.delete('hover');chooseMedia(target,!!guidedRun);draw();return;}
       const step=event.key==='ArrowUp'||event.shiftKey?-1:1;
-      hovered=candidates[(candidates.indexOf(hovered)+step+candidates.length)%candidates.length];hovered.scrollIntoView({block:'nearest'});mark('hover',hovered,pickerLabel(hovered),'#2583e9');return;
+      hovered=candidates[(candidates.indexOf(hovered)+step+candidates.length)%candidates.length];hovered.scrollIntoView({block:'nearest'});hoverMark(hovered);return;
     }
     if(event.repeat)return;
     keys.add(event.key.toLowerCase());if(latched)return;
@@ -287,7 +329,7 @@
       if (message.url && message.url !== location.href) return;
       const target = message.kind === "answer" ? questionRange || question : media;
       if (target) mark(message.kind === "answer" ? "question" : "media", target, message.text, message.error ? "#bd4545" : message.kind === "answer" ? "#9258e8" : "#2583e9");
-      if(window === window.top)say(message.text); if(message.text.startsWith("Ready")){marks.clear();draw();} respond({ok:true});
+      if(window === window.top)say(message.text, !!message.error, !!message.error); if(message.text.startsWith("Ready")){marks.clear();draw();} respond({ok:true});
     }
   });
 })();
