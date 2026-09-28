@@ -64,6 +64,10 @@
     "status": "PASS"
   },
   {
+    "name": "Answer appears in address bar and RA or Escape restores the page URL",
+    "status": "PASS"
+  },
+  {
     "name": "Capture hide responds once even when animation frames are suspended",
     "status": "PASS"
   },

@@ -19,11 +19,11 @@ The letter shortcuts are held chords, not typed sequences, and do not activate i
 | --- | --- |
 | S + T / Alt+Shift+T | Select downloadable audio or a YouTube embed, then a question and all its choices. Download, transcribe, and answer automatically. |
 | Q + A / Alt+Shift+Q | Select a new question using the active saved transcript. No audio download or transcription. |
-| R + A / Alt+Shift+A | Reveal/hide the latest saved answer. |
-| Escape | Cancel the current selection/request or dismiss the answer. |
+| R + A / Alt+Shift+A | Show/hide the latest saved answer in the address bar. |
+| Escape | Cancel the current selection/request or restore the page URL. |
 | Alt+Shift+R | Open recovery and history. |
 
-In the media picker, Up/Down or Tab cycles candidates and Enter selects. Mouse selection also works. In the question picker, arrows move the rectangle, Shift+arrows resize it, and Enter submits; alternatively drag a rectangle with the mouse. Blue marks the audio being downloaded; purple marks the question. Routine answers stay hidden until revealed. Short status cues identify progress/errors.
+In the media picker, Up/Down or Tab cycles candidates and Enter selects. Mouse selection also works. In the question picker, arrows move the rectangle, Shift+arrows resize it, and Enter submits; alternatively drag a rectangle with the mouse. Blue marks the audio being downloaded; purple marks the question. Routine answers stay hidden until revealed. RA adds the answer to the current page URL without loading another page; RA again or Escape restores the original URL. Short status cues identify progress/errors.
 
 ## YouTube embeds without playback
 

@@ -52,7 +52,7 @@
       "suggested_key": {
         "default": "Alt+Shift+A"
       },
-      "description": "Reveal or hide latest answer"
+      "description": "Show or hide latest answer in the address bar"
     },
     "_execute_action": {
       "suggested_key": {

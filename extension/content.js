@@ -58,7 +58,7 @@
   }
 
   const mediaURL = el => youtubeSource(el) || el?.currentSrc || el?.src || el?.querySelector("source[src]")?.src || el?.href || "";
-  let guidedRun = null, cropSurface = null, cropStart = null, cropRect = null, cropViewport = null, cropScroll = null, answerCard = null;
+  let guidedRun = null, cropSurface = null, cropStart = null, cropRect = null, cropViewport = null, cropScroll = null, answerURL = null;
   const keys = new Set();
   let latched = false;
   const marks = new Map();
@@ -125,6 +125,7 @@
   }
   function checkURL() {
     if (currentURL === location.href) return;
+    answerURL = null;
     if (guidedRun) void send({type:'guided-cancel',runId:guidedRun});
     clearCrop(); guidedRun = null;
     currentURL = location.href; question = media = questionRange = null; questionText = ""; marks.clear(); picker = null; draw();
@@ -137,6 +138,7 @@
     } catch {say("Extension reloaded. Refresh this page.", true);}
   }
   function begin(mode) {
+    restoreAnswerURL();
     checkURL(); picker = mode; hovered = null;
     mount();
     // All frames receive the picker message. Only the currently focused frame
@@ -197,7 +199,7 @@
   function questionCrop(runId,source,reuse=false) {
     if(document.activeElement instanceof HTMLIFrameElement)document.activeElement.blur();window.focus();
     mount();root.style.visibility="visible";root.focus({preventScroll:true});clearCrop();cropRect=null;guidedRun=runId;picker=null;marks.clear();draw();questionRange=question=null;
-    answerCard?.remove();
+    restoreAnswerURL();
     cropSurface=document.createElement('div');
     cropSurface.style.cssText=`position:fixed;inset:0;pointer-events:auto;cursor:crosshair;touch-action:none${hints?';background:#0c122033':''}`;
     const box=document.createElement('div');box.className='box';box.style.setProperty('--color','#9258e8');box.style.background='#9258e814';
@@ -242,14 +244,26 @@
     };
   }
 
-  function showAnswer(message) {
-    mount();answerCard?.remove();answerCard=document.createElement('div');
-    answerCard.style.cssText='position:fixed;right:12px;bottom:12px;width:min(340px,calc(100vw - 24px));max-height:45vh;overflow:auto;pointer-events:auto;user-select:text;background:#202124f2;color:#e8eaed;border-left:2px solid #9258e8;border-radius:3px;padding:8px 10px;box-shadow:0 1px 6px #0006;font:12px/1.5 system-ui,sans-serif';
-    const title=document.createElement('strong');title.textContent='Answer';title.style.cssText='font-size:11px;color:#9aa0a6;font-weight:600';
-    const close=document.createElement('button');close.textContent='×';close.setAttribute('aria-label','Close answer');close.style.cssText='float:right;background:transparent;border:0;color:#9aa0a6;font-size:15px;line-height:1;padding:0 2px;cursor:pointer';close.onclick=()=>answerCard.remove();
-    const text=document.createElement('div');text.style.cssText='white-space:pre-wrap;margin-top:4px';text.textContent=message.text;
-    const source=document.createElement('div');source.style.cssText='font-size:10px;color:#9aa0a6;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';source.textContent=message.source;source.title=message.source||'';
-    answerCard.append(close,title,text,source);shadow.append(answerCard);notice.textContent='';
+  function restoreAnswerURL() {
+    if (!answerURL) return;
+    const {original, displayed} = answerURL;
+    answerURL = null;
+    if (location.href === displayed) {
+      history.replaceState(history.state, '', original);
+      currentURL = location.href;
+    }
+  }
+  function toggleAnswerURL(message) {
+    if (answerURL) {restoreAnswerURL();return;}
+    const answer = String(message.text || '').trim().replace(/\s+/g, ' ');
+    if (!answer) return;
+    const original = location.href;
+    const url = new URL(original);
+    url.pathname = url.pathname.replace(/\/$/, '') + '/' + encodeURIComponent(answer);
+    history.replaceState(history.state, '', url.href);
+    answerURL = {original, displayed: location.href};
+    currentURL = location.href;
+    if (notice) notice.textContent = '';
   }
   document.addEventListener("mousemove", event => {
     if (!picker) return;
@@ -277,7 +291,7 @@
     checkURL();
     if(event.key==='Escape'){
       if(guidedRun)void send({type:'guided-cancel',runId:guidedRun});
-      guidedRun=null;clearCrop();picker=null;hovered=null;keys.clear();latched=false;marks.clear();draw();answerCard?.remove();if(notice)notice.textContent='';return;
+      guidedRun=null;clearCrop();picker=null;hovered=null;keys.clear();latched=false;marks.clear();draw();restoreAnswerURL();if(notice)notice.textContent='';return;
     }
     const typing=event.composedPath().some(el=>el instanceof Element&&(el.matches('input,textarea,select,[role=textbox]')||el.isContentEditable));
     if(typing||event.ctrlKey||event.altKey||event.metaKey||event.isComposing)return;
@@ -308,7 +322,7 @@
     checkURL();
     
     if (message.type === "select-media") {guidedRun=null;begin("media"); respond({ok:true});}
-    if(message.type==='guided-pick-media'){marks.clear();clearCrop();guidedRun=message.runId;answerCard?.remove();begin('media');respond({ok:true});}
+    if(message.type==='guided-pick-media'){marks.clear();clearCrop();guidedRun=message.runId;begin('media');respond({ok:true});}
     if(message.type==='guided-end-picker'){picker=null;hovered=null;clearCandidates();marks.delete('hover');if(root)root.style.visibility='visible';if(notice)notice.textContent='';draw();respond({ok:true});}
     if(message.type==='guided-question'){questionCrop(message.runId,message.source,message.reuse);respond({ok:true});}
     if(message.type==='guided-validate')respond({ok:guidedRun===message.runId && cropViewport?.width===innerWidth && cropViewport?.height===innerHeight && cropScroll?.x===scrollX && cropScroll?.y===scrollY});
@@ -323,7 +337,7 @@
     }
     if(message.type==='guided-show'){if(root)root.style.visibility='visible';respond({ok:true});}
     if(message.type==='guided-cancelled'){guidedRun=null;picker=null;clearCrop();clearCandidates();marks.clear();draw();if(notice)notice.textContent='';respond({ok:true});}
-    if(message.type==='reveal-answer'){if(answerCard?.isConnected)answerCard.remove();else showAnswer(message);respond({ok:true});}
+    if(message.type==='reveal-answer'){toggleAnswerURL(message);respond({ok:true});}
     if (message.type === "validate-media") respond({ok: !!media?.isConnected && !media.mediaKeys && media.dataset.pagecueId === message.id && message.pageUrl === location.href && mediaURL(media) === message.url});
     if (message.type === "status") {
       if (message.url && message.url !== location.href) return;
